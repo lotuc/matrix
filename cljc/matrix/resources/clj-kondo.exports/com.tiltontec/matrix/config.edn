@@ -1,0 +1,39 @@
+{:hooks {:macroexpand {tiltontec.util.base/def-rmap-props
+                       hooks.tiltontec.util.base/def-rmap-props
+
+                       tiltontec.util.base/def-rmap-meta-props
+                       hooks.tiltontec.util.base/def-rmap-meta-props
+
+                       tiltontec.util.base/wtrx
+                       hooks.tiltontec.util.base/wtrx
+
+                       tiltontec.util.base/b-when
+                       hooks.tiltontec.util.base/b-when
+
+                       tiltontec.util.base/trx
+                       hooks.tiltontec.util.base/trx
+
+                       tiltontec.model.core/make
+                       hooks.tiltontec.cell.core/cF
+
+                       tiltontec.cell.core/cF
+                       hooks.tiltontec.cell.core/cF
+
+                       tiltontec.cell.synapse/with-synapse
+                       hooks.tiltontec.cell.synapse/with-synapse
+
+                       tiltontec.cell.core/cF+
+                       hooks.tiltontec.cell.core/cF+
+
+                       tiltontec.matrix.api/fn-watch
+                       hooks.tiltontec.matrix.api/fn-watch}}
+ :linters {:clojure-lsp/unused-public-var {:exclude #{tiltontec.cell.base
+                                                      tiltontec.cell.core
+                                                      tiltontec.cell.evaluate
+                                                      tiltontec.cell.integrity
+                                                      tiltontec.cell.synapse
+                                                      tiltontec.matrix.api
+                                                      tiltontec.model.base
+                                                      tiltontec.model.core
+                                                      tiltontec.util.base
+                                                      tiltontec.util.core}}}}
