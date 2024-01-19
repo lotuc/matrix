@@ -11,7 +11,6 @@
       :cljs [tiltontec.cell.base
              :refer-macros [without-c-dependency]
              :refer [c-callers c-useds cells-init unbound] :as cty])
-   #?(:cljs :clj)
    #?(:cljs [tiltontec.cell.core
              :refer-macros [cF cF+ c_F cF_]
              :refer [c-reset! cI]]

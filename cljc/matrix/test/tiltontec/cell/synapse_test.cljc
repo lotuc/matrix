@@ -3,10 +3,6 @@
   (:require
    #?(:clj  [clojure.test :refer :all]
       :cljs [cljs.test :refer-macros [deftest is are]])
-   #?(:cljs :clj)
-   #?(:clj
-      :cljs)
-   #?(:cljs :clj)
    #?(:clj
       [tiltontec.cell.synapse :refer :all]
       :cljs [tiltontec.cell.synapse :refer-macros [with-synapse]])

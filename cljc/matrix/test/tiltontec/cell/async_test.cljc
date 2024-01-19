@@ -1,9 +1,6 @@
 (ns tiltontec.cell.async-test
   (:require
-   #?(:clj  [clojure.test :refer :all]
-      :cljs)
-   #?(:clj
-      :cljs)
+   #?(:clj  [clojure.test :refer :all])
    #?(:clj
       [clj-http.client :as client]
       :cljs [cljs-http.client :as client]))
@@ -37,4 +34,3 @@
                  (.cancel ag true)
                  e))]
       (prn :xhr er))))
-

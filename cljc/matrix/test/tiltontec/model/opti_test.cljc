@@ -3,9 +3,6 @@
    #?(:clj  [clojure.test :refer :all]
       :cljs [cljs.test
              :refer-macros [deftest is are]])
-   #?(:cljs :clj)
-   #?(:clj  :cljs)
-   #?(:cljs :clj)
    #?(:cljs [tiltontec.cell.core
              :refer-macros [cF+ c-reset-next! cFonce cFn]
              :refer [c-reset! cI make-c-formula make-cell]]

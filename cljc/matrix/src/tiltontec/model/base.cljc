@@ -5,8 +5,6 @@
    #?(:cljs [tiltontec.util.base
              :refer-macros [trx wtrx prog1 *trx?* def-rmap-props def-rmap-meta-props]]
       :clj  [tiltontec.util.base :refer :all])
-   #?(:cljs :clj)
-   #?(:cljs :clj)
    [tiltontec.cell.base
     :refer [c-input? c-ref? c-value md-state unbound] :as cty]
    [tiltontec.cell.poly :refer [md-awaken-before watch]]

@@ -3,12 +3,10 @@
    #?(:clj  [clojure.test :refer :all]
       :cljs [cljs.test
              :refer-macros [deftest is are]])
-   #?(:cljs :clj)
    #?(:clj  [tiltontec.cell.base :refer :all :as cty]
       :cljs [tiltontec.cell.base
              :refer-macros [without-c-dependency]
              :refer [c-callers c-optimized-away? c-useds] :as cty])
-   #?(:cljs :clj)
    #?(:cljs [tiltontec.cell.core
              :refer-macros [cF cF+ c-swap! c-reset-next!]
              :refer [c-reset! cI]]

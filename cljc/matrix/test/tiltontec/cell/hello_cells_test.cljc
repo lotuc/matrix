@@ -11,7 +11,6 @@
       :cljs [tiltontec.cell.base
              :refer-macros [without-c-dependency]
              :refer [cells-init] :as cty])
-   #?(:cljs :clj)
    #?(:cljs [tiltontec.cell.core
              :refer-macros [cF cF+ c-reset-next! cFonce cFn]
              :refer [c-reset! cI make-c-formula make-cell]]

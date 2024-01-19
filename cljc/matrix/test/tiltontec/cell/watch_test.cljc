@@ -13,7 +13,6 @@
              :refer-macros [without-c-dependency]
              :refer [c-callers c-input? c-model c-prop c-prop-name c-useds
                      c-valid? c-value-state] :as cty])
-   #?(:cljs :clj)
    #?(:cljs [tiltontec.cell.core
              :refer-macros [cF cF+]]
       :clj  [tiltontec.cell.core :refer :all])
