@@ -1,4 +1,5 @@
-(ns mxreact.mxreact)
+(ns mxreact.mxreact
+  (:refer-clojure :exclude [map meta time]))
 
 (defmacro $
   [type & args]
@@ -56,12 +57,13 @@
                               (cond-> ~jsx-props
                                 (tiltontec.matrix.api/mget? ~'me :use-ref?)
                                 (assoc :ref (mxreact.mxreact/ref-get ~'me))))
-                             (map (fn [mapkid#]
-                                    (if (string? mapkid#)
-                                      mapkid#
-                                      (let [kidelt# (tiltontec.matrix.api/mget mapkid# :react-element)]
-                                        kidelt#)))
-                                  (tiltontec.matrix.api/mget? ~'me :kids))))))
+                             (clojure.core/map
+                              (fn [mapkid#]
+                                (if (string? mapkid#)
+                                  mapkid#
+                                  (let [kidelt# (tiltontec.matrix.api/mget mapkid# :react-element)]
+                                    kidelt#)))
+                              (tiltontec.matrix.api/mget? ~'me :kids))))))
     ~@(apply concat (into [] mx-props))))
 
 (defmacro mk [node-type mx-props jsx-props & kids]
@@ -79,12 +81,13 @@
                                 (tiltontec.matrix.api/mget? ~'me :use-ref?)
                                 (assoc :ref (mxreact.mxreact/ref-get ~'me))))
                              ;; ^^^ so this runs while "me" is bound to intended mx
-                             (map (fn [mapkid#]
-                                    (if (string? mapkid#)
-                                      mapkid#
-                                      (let [kidelt# (tiltontec.matrix.api/mget mapkid# :react-element)]
-                                        kidelt#)))
-                                  (tiltontec.matrix.api/mget? ~'me :kids))))))
+                             (clojure.core/map
+                              (fn [mapkid#]
+                                (if (string? mapkid#)
+                                  mapkid#
+                                  (let [kidelt# (tiltontec.matrix.api/mget mapkid# :react-element)]
+                                    kidelt#)))
+                              (tiltontec.matrix.api/mget? ~'me :kids))))))
     ~@(apply concat (into [] mx-props))))
 
 (declare
