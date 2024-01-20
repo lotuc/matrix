@@ -4,8 +4,8 @@
   (:require
    [helix.experimental.refresh :as r]))
 
-
 (r/inject-hook!)
 
+#_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defn ^:dev/after-load refresh []
   (r/refresh!))
