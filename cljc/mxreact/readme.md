@@ -16,6 +16,10 @@ In your browser, visit http://localhost:8888
 
 More soon.
 
+mxReact is now hosted on clojars.
+
+[![Clojars Project](https://img.shields.io/clojars/v/org.lotuc/mxreact.svg?include_prereleases)](https://clojars.org/org.lotuc/mxreact)
+
 ## Template Credit
 
 Created by [Will Acton](https://lilac.town)
