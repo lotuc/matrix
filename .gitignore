@@ -22,3 +22,4 @@ cljs/archive
 !.clj-kondo/config.edn
 .lsp
 !.lsp/config.edn
+.cpcache
