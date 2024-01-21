@@ -36,7 +36,7 @@ Feel free to reach out for guidance on how your application might be recast as a
 ### Including Matrix in a project
 Matrix is hosted on clojars.
 
-[![Clojars Project](https://img.shields.io/clojars/v/com.tiltontec/matrix.svg?include_prereleases)](https://clojars.org/com.tiltontec/matrix)
+[![Clojars Project](https://img.shields.io/clojars/v/org.lotuc/matrix.svg?include_prereleases)](https://clojars.org/org.lotuc/matrix)
 
 In leiningen projects, add to your project.clj dependencies the following:
 ```bash
