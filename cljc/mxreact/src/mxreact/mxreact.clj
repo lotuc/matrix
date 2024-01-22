@@ -20,12 +20,21 @@
 
 (defmacro component-with-hooks [& body]
   `(fn []
-     (let [[~'_ set-state#] (.useState (get-react) 0)
+     (let [[state# set-state#] (.useState (get-react) 0)
+           me# ~'me
            ref# (when (tiltontec.matrix.api/mget? ~'me :use-ref?)
-                  (.useRef (get-react) :ref-undefined))]
-       (mxreact.mxreact/set-state-record ~'me set-state#)
-       (when ref#
-         (mxreact.mxreact/ref-record ~'me ref#))
+                  (.useRef (get-react) :ref-undefined))
+
+           n# (tiltontec.matrix.api/mget? ~'me :name)
+           sid# (tiltontec.matrix.api/mget? ~'me :sid)]
+       (.useEffect (get-react)
+                   (fn []
+                     (when ref# (mxreact.mxreact/ref-record me# ref#))
+                     (mxreact.mxreact/set-state-record me# set-state#)
+                     (fn []
+                       (mxreact.mxreact/set-state-unrecord me#)
+                       (when ref# (mxreact.mxreact/ref-unrecord me#))))
+                   (cljs.core/clj->js [me# ref# set-state#]))
        ~@body)))
 
 (defmacro mx$ [textFormulaBody]
@@ -111,6 +120,11 @@
     sub summary sup table tbody td tfoot th thead time title tr track u ul var video wbr
     circle clipPath ellipse g line mask path pattern polyline rect svg text defs
     linearGradient polygon radialGradient stop tspan])
+
+(comment
+  ;; generating clj-kondo hook configuration for tags
+  (doseq [tag tags]
+    (println (str "mxreact.mxreact/" tag " hooks.mxreact.mxreact/tag"))))
 
 (defn gen-tag
   [tag]

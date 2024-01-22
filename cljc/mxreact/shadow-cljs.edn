@@ -2,11 +2,10 @@
 {:deps true
  :builds
  {:app {:target :browser
-        :output-dir "js"
+        :output-dir "public/js"
         :asset-path "/js"
         :modules {:app {:entries [demo.core]}}
-        :devtools {:http-root    "."
-                   :http-port    8888
+        :devtools {:http-root "public"
+                   :http-port 8888
                    :reload-strategy :full
-                   :preloads     [devtools.preload
-                                  demo.dev]}}}}
+                   :preloads [devtools.preload demo.dev]}}}}

@@ -4,7 +4,7 @@
    [react]
    [tiltontec.cell.base :refer [pulse-now unbound]]
    [tiltontec.cell.poly :refer [watch-by-type]]
-   [tiltontec.matrix.api :refer [fm-navig mget]]))
+   [tiltontec.matrix.api :refer [fm-navig mget mget?] :as mx]))
 
 ;(def <> react/createElement)
 
@@ -19,10 +19,8 @@
 
 (def ssdict (atom {}))
 (defn set-state-record [me setter]
-  ;;(prn :recording-new-set-state (mget me :sid))
   (swap! ssdict assoc (mget me :sid) setter))
 (defn set-state-unrecord [me]
-  ;;(prn :setstate-unrecord (mget me :sid))
   (swap! ssdict dissoc (mget me :sid)))
 
 (def refdict (atom {}))
@@ -31,7 +29,6 @@
 (defn ref-get [me]
   (get @refdict (mget me :sid)))
 (defn ref-unrecord [me]
-  ;;(prn :refunrecord (mget me :sid))
   (swap! refdict dissoc (mget me :sid)))
 
 (defn fm*
@@ -57,8 +54,8 @@
   (if-let [sid (mget me :sid)]
     (if-let [set-state-fn (get @ssdict sid)]
       (set-state-fn (pulse-now))
-      (prn :shs-no-state-fn!!! (mget me :name) sid))
-    (prn :shs-no-sid!! (mget me :name) me)))
+      (prn :shs-no-state-fn!!! sid (mget? me :name)))
+    (prn :shs-no-sid!! (mget? me :name) me)))
 
 (defmethod watch-by-type [:mxreact.mxreact/matrixrn.elt] [slot me _newv oldv _cell]
   ;;(prn :obs-type-matrixrn-elt-entry??? slot (mget me :name)(mget me :sid))
