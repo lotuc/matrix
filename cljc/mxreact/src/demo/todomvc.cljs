@@ -1,4 +1,5 @@
 (ns demo.todomvc
+  (:require-macros [demo.todomvc :refer [swap-todos!]])
   (:require
    [clojure.string :as string]
    [mxreact.mxreact :as mxr]
@@ -78,8 +79,15 @@
 (defn header []
   (mxr/header
    {} {:className "header"}
-   (mxr/h1 {} {} "todos")
-   (Input {:on-submit #(mx/mswap! (fmu :todo-list) :value add-todo %)
+   (mxr/h1 {} {} "todos" (+ 2 3) "123")
+   (Input {:on-submit
+           ;; macro magic which is equivelant to
+           ;; #(mx/mswap! (fmu :todo-list) :value add-todo %)
+           ;;
+           ;; the following demo won't use it, but it shows the verbosity can be
+           ;; abstracted away, and it is pretty local scoped.
+           #(swap-todos! add-todo %)
+
            :label "New Todo Input"
            :placeholder "What needs to be done?"})))
 
@@ -157,13 +165,15 @@
    :todomvc
    :rx-dom
    (cFonce
-    (mxr/div {:name :todo-list :value (mx/cI [])} {}
-             (mxr/span {:name :router
-                        :hash (mx/cI js/window.location.hash
-                                     :watch (fn [_prop _me new _old _c]
-                                              (when-not (= new js/window.location.hash)
-                                                (set! js/window.location.hash new))))}
-                       {})
+    (mxr/div {:name :todo-list :value (mx/cI [])} {:className "todoapp"}
+             ;; non-element kid
+             (mx/make ::router
+                      :name :router
+                      :hash (mx/cI js/window.location.hash
+                                   :watch (fn [_prop _me new _old _c]
+                                            (when-not (= new js/window.location.hash)
+                                              (set! js/window.location.hash new)))))
+             ;; react-element kid
              (header)
              (main)
              (footer)))))

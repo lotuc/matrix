@@ -8,7 +8,9 @@
      [~'me ~'_cell ~'_prop-name ~'_cache]
      (do ~sth
          (cljs.core/clj->js ~jsx-props)
-         ~@kids
+         (doseq [k# (apply flatten [~@kids])]
+           ;; tell the analyzer we're actually using the value
+           (pr k#))
          ~@(map second mx-props))))
 
 (defmacro mk [sth mx-props jsx-props & kids]

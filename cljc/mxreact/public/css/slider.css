@@ -2,8 +2,8 @@
   width: 100%;
   max-width: 500px;
   height: 50px;
-  margin: auto;
   background: yellow;
+  margin: 20px auto;
 }
 .slider {
   width: 100%;

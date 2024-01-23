@@ -46,9 +46,9 @@
     (render-matrix-app x100-hello-world/app))
 
   (render-matrix-app todomvc/demo)
-  ;; (render-root-element (mxr/$ demo.slider/App))
 
   ;; `render-matrix-app` saves root app's model in md/matrix
+
   (when-some [m (some-> md/matrix deref deref :rx-dom)]
     ;; save some state between code reload
     (reloaded/restore-and-watch-model-inputs! m !state)))
