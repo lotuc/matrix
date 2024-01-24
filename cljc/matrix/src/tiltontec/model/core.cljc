@@ -160,7 +160,7 @@
   ;;(prn :watcherve-kids-family-method)
   (fm-kids-watch me newk oldk c))
 
-(defmethod md-quiesce [::family]
+(defmethod md-quiesce ::family
   [me]
   (mxtrc :quiesce :family-md-quies-entry! (minfo me))
   (doseq [k (:kids @me)]
