@@ -2,10 +2,10 @@
   (:require-macros [mxreact.mxreact])
   (:require
    [react]
-   [tiltontec.util.core]
    [tiltontec.cell.base :refer [pulse-now unbound] :as mcb]
-   [tiltontec.cell.poly :refer [watch-by-type md-quiesce md-quiesce-self]]
-   [tiltontec.matrix.api :refer [fm-navig mget mget?] :as mx]))
+   [tiltontec.cell.poly :refer [md-quiesce md-quiesce-self watch-by-type]]
+   [tiltontec.matrix.api :refer [fm-navig mget mget?] :as mx]
+   [tiltontec.util.core]))
 
 ;(def <> react/createElement)
 
@@ -52,9 +52,8 @@
   ;; (mx/prx :md-quiesce me)
   (set-state-unrecord me)
   (ref-unrecord me)
-  (doseq [k (:kids @me)]
-    (when (mx/any-ref? k)
-      (md-quiesce k)))
+  (doseq [k (:kids @me) :when (mx/any-ref? k)]
+    (md-quiesce k))
   (md-quiesce-self me))
 
 (defn state-hook-set! [me _slot]
@@ -64,9 +63,9 @@
       (prn :shs-no-state-fn!!! sid (mget? me :name)))
     (prn :shs-no-sid!! (mget? me :name) me)))
 
-(defmethod watch-by-type [:mxreact.mxreact/matrixrn.elt] [slot me _newv oldv _cell]
-  ;; (mx/prx :obs-type-matrixrn-elt-entry slot me)
-  (when (not= oldv unbound)
+(defmethod watch-by-type [:mxreact.mxreact/matrixrn.elt] [prop-name me _new-val old-val _c]
+  ;; (mx/prx :obs-type-matrixrn-elt-entry prop-name me)
+  (when (not= old-val unbound)
     ;; ^^^ observe forced anyway on new cells, when (= oldv unbound), so do not bother
-    ;; (mx/prx :obs-by-type-setting-state slot (mget me :name) (mget me :sid) #_(meta me) (mcb/mdead? me))
-    (state-hook-set! me slot)))
+    ;; (mx/prx :watch-by-type-setting-state prop-name (mget? me :name) (mget me :sid) (meta me) (mcb/mdead? me))
+    (state-hook-set! me prop-name)))

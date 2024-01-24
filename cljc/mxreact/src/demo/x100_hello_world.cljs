@@ -3,7 +3,8 @@
    ["react-slider" :default ReactSlider]
    [mxreact.mxreact :as mxr]
    [react]
-   [tiltontec.matrix.api :refer-macros [mpar cF cFonce] :as mx]))
+   [tiltontec.matrix.api :refer-macros [mpar cF cFonce] :as mx]
+   [demo.window-location :refer [make-window-location]]))
 
 ;; The JS:
 ;;    import ReactSlider from "react-slider";
@@ -87,30 +88,21 @@
                       (mxr/mx$ (mx/mget (mpar me) :title)))
 
                       ;; plain matrix model, won't be rendered as react element
-                     (mx/make ::router
-                              :name :router
-                              :hash (mx/cI js/window.location.hash
-                                            ;; watch the cell changes
-                                           :watch (fn [_prop _me new _old _c]
-                                                    (when-not (= new js/window.location.hash)
-                                                      (set! js/window.location.hash new)))))
+                     (make-window-location :name :router)
 
-                      ;; plain string/number or expression that creates it
-                     42 "+" 42 "=" (+ 42 42)
-                     (mxr/br {} {})
-
-                      ;; build reactive text with mx$
-                     "location.hash: " (mxr/mx$
-                                         ;; find model by name
-                                        (let [router-model (mxr/fm* me :router)]
-                                           ;; Notes:
-                                           ;;   `mget` is a getter that establishes dependency
-                                          (mx/mget router-model :hash)))
-                     ", click " (for [href ["#/42" "#/24"]]
-                                  (mxr/a {} {:style {:marginRight "5px" :borderBottom "3px solid red" :cursor "pointer"}
-                                             :onClick (fn [_] (mx/mset! (mxr/fm* me :router) :hash href))}
-                                         href))
-                     "to change."
+                     (mxr/p {} {}
+                            "location.hash: "
+                             ;; reactive text with mx$
+                            (mxr/mx$
+                              ;; find model by name
+                             (let [router-model (mxr/fm* me :router)]
+                                ;; Notes:
+                                ;;   `mget` is a getter that establishes dependency
+                               (mx/mget router-model :hash)))
+                            ", click "
+                            (for [href ["#/42" "#/24"]]
+                              (mxr/a {} {:style {:marginRight "5px"} :href href} href))
+                            "to change.")
 
                       ;; the slider component
                      (Slider)))))

@@ -1,9 +1,9 @@
 (ns demo.core
   (:require
    ["react-dom/client" :refer [createRoot]]
-   [demo.reloaded :as reloaded]
    [demo.slider :as slider]
    [demo.todomvc :as todomvc]
+   [demo.list]
    [demo.x100-hello-world :as x100-hello-world]
    [mxreact.mxreact :as mxr]
    [react]
@@ -34,21 +34,22 @@
   ;; read model's prop with mget
   (mx/mget todo-list :value)
   ;; set! model's prop with mset!
-  (mx/mset! todo-list :value []))
-
-(defonce !state (atom nil))
+  (mx/mset! todo-list :value [])
+  (mx/mset! (mxr/fm* (:rx-dom @@md/matrix) :todo-list)
+            :value (map (fn [i] {:id i :title (str "item" i)
+                                 :completed? false})
+                        (range 10))))
 
 #_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defn ^:dev/after-load start []
   (comment
     (render-root-element (mxr/$ demo.slider/App))
     (render-matrix-app todomvc/demo)
-    (render-matrix-app x100-hello-world/app))
+    (render-matrix-app x100-hello-world/app)
 
-  (render-matrix-app todomvc/demo)
+    (render-matrix-app demo.list/MatrixApp)
+    (render-root-element (mxr/$ demo.list/ReactApp)))
 
-  ;; `render-matrix-app` saves root app's model in md/matrix
-
-  (when-some [m (some-> md/matrix deref deref :rx-dom)]
-    ;; save some state between code reload
-    (reloaded/restore-and-watch-model-inputs! m !state)))
+  ;; (render-matrix-app todomvc/demo)
+  ;; (render-matrix-app demo.list/MatrixApp)
+  (render-root-element (mxr/$ demo.list/ReactApp)))

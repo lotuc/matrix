@@ -79,7 +79,7 @@
 (defn header []
   (mxr/header
    {} {:className "header"}
-   (mxr/h1 {} {} "todos" (+ 2 3) "123")
+   (mxr/h1 {} {} "todos")
    (Input {:on-submit
            ;; macro magic which is equivelant to
            ;; #(mx/mswap! (fmu :todo-list) :value add-todo %)
@@ -91,18 +91,18 @@
            :label "New Todo Input"
            :placeholder "What needs to be done?"})))
 
-(defn item [{:keys [todo index]
-             {:keys [id title completed?]} :todo}]
-  (mxr/li {} (if completed? {:className "completed"} {})
-          (mxr/div {:name :item :writable? (mx/cI false)} {:className "view"}
+(defn item [index {:keys [id title completed?]}]
+  (mxr/li {:key index} (if completed? {:className "completed"} {})
+          (mxr/div {:name :item :writable? (mx/cI false)}
+                   {:className "view"}
                    (let [c me]
                      (if (mx/mget me :writable?)
-                       [(Input {:on-blur #(mx/mswap! c :writable? not)
-                                :default-value title
-                                :on-submit #(do (if (= (count %) 0)
-                                                  (mx/mswap! (fmu :todo-list) :value remove-todos id)
-                                                  (mx/mswap! (fmu :todo-list) :value update-todos id %))
-                                                (mx/mswap! c :writable? not))})]
+                       (Input {:on-blur #(mx/mswap! c :writable? not)
+                               :default-value title
+                               :on-submit #(do (if (= (count %) 0)
+                                                 (mx/mswap! (fmu :todo-list) :value remove-todos id)
+                                                 (mx/mswap! (fmu :todo-list) :value update-todos id %))
+                                               (mx/mswap! c :writable? not))})
                        [(mxr/input {} {:className "toggle" :type "checkbox" :checked completed?
                                        :onChange (fn [_] (mx/mswap! (fmu :todo-list) :value toggle-todo id))})
                         (mxr/label {} {:className "todo-item-label"
@@ -122,16 +122,18 @@
                                       todos)))
              :some-visible? (mx/cF (pos? (count (mx/mget me :visible-todos))))}
             {:className "main"}
-            [(when (mx/mget me :some-visible?)
-               (mxr/div {} {:className "toggle-all-container"}
-                        (mxr/input {}
-                                   {:className "toggle-all" :type "checkbox"
-                                    :defaultChecked (every? :completed? (mx/mget (fmu :main) :visible-todos))
-                                    :onChange #(mx/mswap! (fmu :todo-list) :value toggle-all (.-checked (.-target %)))})
-                        (mxr/label {} {:className "toggle-all-label"} "Toggle All Input")))
-             (mxr/ul {} {:className "todo-list"}
-                     (for [[i todo] (map-indexed list (mx/mget (fmu :main) :visible-todos))]
-                       (item {:index i :todo todo})))]))
+            (when (mx/mget me :some-visible?)
+              (mxr/div {} {:className "toggle-all-container"}
+                       (mxr/input {}
+                                  {:className "toggle-all" :type "checkbox"
+                                   :defaultChecked (every? :completed? (mx/mget (fmu :main) :visible-todos))
+                                   :onChange #(mx/mswap! (fmu :todo-list) :value toggle-all (.-checked (.-target %)))})
+                       (mxr/label {} {:className "toggle-all-label"} "Toggle All Input")))
+            (mxr/ul {:kid-values (mx/cF (mx/mget (fmu :main) :visible-todos))
+                     :kid-key #(mx/mget % :key)
+                     :kid-factory item}
+                    {:className "todo-list"}
+                    (mx/kid-values-kids me _cache))))
 
 (defn footer []
   (mxr/footer
@@ -146,12 +148,9 @@
                (str c " " (if (<= c 1) "item" "items") " left")))
    (mxr/ul {} {:className "filters"}
            (for [[href txt]  [["#/" "All"] ["#/active" "Active"] ["#/completed" "Completed"]]
-                 :let [selected? (= href (mx/mget (fmu :router) :hash))]]
-             (mxr/li {} {}
-                     (mxr/a {}
-                            (merge (when selected? {:className "selected"})
-                                   {:href href :onClick (fn [_] (mx/mset! (fmu :router) :hash href))})
-                            txt))))
+                 :let [selected? (= href (mx/mget (fmu :router) :hash))
+                       prop (merge (when selected? {:className "selected"}) {:href href})]]
+             (mxr/li {} {} (mxr/a {} prop txt))))
 
    (mxr/button {:disabled? (mx/cF (let [{:keys [total active]} (mx/mget (fmu :footer) :counts)]
                                     (= total active)))}
@@ -166,14 +165,18 @@
    :rx-dom
    (cFonce
     (mxr/div {:name :todo-list :value (mx/cI [])} {:className "todoapp"}
-             ;; non-element kid
+              ;; non-element kid
              (mx/make ::router
                       :name :router
-                      :hash (mx/cI js/window.location.hash
-                                   :watch (fn [_prop _me new _old _c]
-                                            (when-not (= new js/window.location.hash)
-                                              (set! js/window.location.hash new)))))
-             ;; react-element kid
+                      :on-quiesce (fn [c]
+                                    (js/window.navigation.removeEventListener
+                                     "navigate" (mx/mget c :listener)))
+                      :listener (mx/cFonce
+                                 (let [cb (fn [e] (mx/mset! me :hash (.-hash (js/URL. (.-url (.-destination e))))))]
+                                   (js/window.navigation.addEventListener "navigate" cb)
+                                   cb))
+                      :hash (mx/cI js/window.location.hash))
+              ;; react-element kid
              (header)
              (main)
              (footer)))))

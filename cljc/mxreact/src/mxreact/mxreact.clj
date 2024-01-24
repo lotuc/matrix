@@ -64,7 +64,7 @@
                                  (clojure.core/map
                                   (fn [mapkid#]
                                     (when mapkid#
-                                      (if (tiltontec.util.core/any-ref? mapkid#)
+                                      (if (tiltontec.matrix.api/any-ref? mapkid#)
                                         (tiltontec.matrix.api/mget? mapkid# :react-element)
                                         (str mapkid#)))))
                                  (clojure.core/filter some?)))))))
