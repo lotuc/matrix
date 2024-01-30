@@ -21,26 +21,25 @@
 
 (defn match-loose [seek in]
   (when-not (nil? in)
-    (cond
-      (= in :all) true
-      (and (coll? in)
-           (some #{:all} in)) true
-      :else (not-empty
-             (set/intersection (ensure-set seek) (ensure-set in))))))
+    (or (= in :all)
+        (and (coll? in) (some #{:all} in))
+        (seq (set/intersection (ensure-set seek) (ensure-set in))))))
 
-(defn mxtrc [& bits]
-  (let [tag (first bits)]
-    (assert (or (keyword? tag)
-                (and (vector? tag)
-                     (every? keyword? tag)))
-            (str "mxtrc> first argument must be keyword or keywords to trace, not |"
-                 tag "|"))
-    (when (match-loose tag *mx-trace*)
-      (apply prn :mxtrc> bits))))
+(defn mxtrc
+  "Prints bits if tag is in *mx-trace*."
+  [& [tag :as bits]]
+  (assert (or (keyword? tag)
+              (and (vector? tag)
+                   (every? keyword? tag)))
+          (str "mxtrc> first argument must be keyword or keywords to trace, not |"
+               tag "|"))
+  (when (match-loose tag *mx-trace*)
+    (apply prn :mxtrc> bits)))
 
 (comment
+  (mxtrc "not ok")
   (mxtrc :boom "hi mom")
-  (binding [*mx-trace* :boom]
-    (mxtrc :bom "hi mom")))
-
-
+  (binding [*mx-trace* [:boom :bom]]
+    (mxtrc :bom "hi mom"))
+  (binding [*mx-trace* [:boom :bom]]
+    (mxtrc [:bom] "hi mom")))

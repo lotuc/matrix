@@ -36,11 +36,10 @@
 (defmulti watch (fn [prop-name me new-val old-val c]
                   [prop-name (mx-type me)]))
 
-(def +watch-default-handler+ (atom nil)) ;; todo excessive flexibility? debugging?
+ ;; todo excessive flexibility? debugging?
+(def +watch-default-handler+ (atom nil))
 
 (defmethod watch :default [prop me new-val old-val c]
   (if-let [w @+watch-default-handler+]
-    #_{:clj-kondo/ignore [:redundant-do]}
-    (do                                                     ;; (println :app-def-obs-hanler!!!)
-      (w prop me new-val old-val c))
+    (w prop me new-val old-val c)
     (watch-by-type prop me new-val old-val c)))

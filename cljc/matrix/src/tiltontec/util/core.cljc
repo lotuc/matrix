@@ -138,10 +138,8 @@
   (empty? @q))
 (defn fifo-peek [q]
   (first @q))
-
 (defn fifo-add [q new]
   (#?(:clj alter :cljs swap!) q conj new))
-
 (defn fifo-pop [q]
   (when-not (fifo-empty? q)
     (utm/prog1

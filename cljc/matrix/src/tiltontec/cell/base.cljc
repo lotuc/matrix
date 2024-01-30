@@ -3,16 +3,12 @@
                              :refer [un-stopped without-c-dependency]]))
   (:require
    [#?(:cljs cljs.pprint :clj clojure.pprint) :refer [pprint]]
-   #?(:clj [clojure.string :as str])
    #?(:cljs [tiltontec.util.base :as utm
              :refer [mx-type mx-type?]
              :refer-macros [def-rmap-props]]
       :clj  [tiltontec.util.base :as utm
              :refer [def-rmap-props mx-type mx-type?]])
-   #?(:cljs [tiltontec.util.core
-             :refer [any-ref? mut-set!]
-             :as ut]
-      :clj  [tiltontec.util.core :refer [any-ref? mut-set!] :as ut])))
+   [tiltontec.util.core :refer [any-ref? mut-set!] :as ut]))
 
 ;; --- the Cells beef -----------------------
 (defn pulse-initial []
@@ -27,8 +23,7 @@
 
 (defn cells-init []
   #?(:cljs (reset! *pulse* 0)
-     :clj  (dosync
-            (ref-set *pulse* 0))))
+     :clj  (dosync (ref-set *pulse* 0))))
 
 (def ^:dynamic *causation* '())
 (def ^:dynamic *call-stack* nil)
@@ -76,10 +71,16 @@ rule to get once behavior or just when fm-traversing to find someone"
 
 (def ^:dynamic *c-prop-depth* 0)
 
+;;; a collection of tags to be traced (checkout
+;;; `tiltontec.cell.diagnostic/mxtrc`)
 (def ^:dynamic *mx-trace* nil)
+
+;;; a function which receives model and returns debug info of it. checkout
+;;; `minfo` for its default.
 (def ^:dynamic *mx-minfo* nil)
 
-(def ^:dynamic +stop+ (atom false))                         ;; emergency brake
+;; emergency brake
+(def ^:dynamic +stop+ (atom false))
 
 (defn cells-reset
   ([] (cells-reset {}))
@@ -97,7 +98,8 @@ rule to get once behavior or just when fm-traversing to find someone"
 ;; --- 19000 ----------------------------------
 
 (defn c-stopper [why]
-  (reset! +stop+ why))                                      ;; in webserver, make sure each thread binds this freshly
+  ;; in webserver, make sure each thread binds this freshly
+  (reset! +stop+ why))
 
 (def +c-stopper+ (atom c-stopper))
 
@@ -113,7 +115,8 @@ rule to get once behavior or just when fm-traversing to find someone"
   `(when-not @+stop+
      ~@body))
 
-(defn ustack$ [tag]                                         ;; debug aid
+(defn ustack$ [tag]
+  ;; debug aid
   (str tag "ustack> " (vec (map (fn [c] (:prop @c)) *call-stack*))))
 
 (defn c-break [& args]
@@ -152,10 +155,9 @@ rule to get once behavior or just when fm-traversing to find someone"
 
 (defn c-value [c]
   (assert (any-ref? c))
-  (cond
-    (and (c-ref? c)
-         (map? @c)) (:value @c)
-    :else @c))
+  (if (and (c-ref? c) (map? @c))
+    (:value @c)
+    @c))
 
 (declare cdbg)
 
@@ -201,10 +203,8 @@ rule to get once behavior or just when fm-traversing to find someone"
 
 (defn dependency-record [used]
   (when-not (c-optimized-away? used)
-    (mut-set! *depender* :useds
-              (conj (c-useds *depender*) used))
-    (mut-set! used :callers
-              (conj (c-callers used) *depender*))))
+    (mut-set! *depender* :useds (conj (c-useds *depender*) used))
+    (mut-set! used :callers (conj (c-callers used) *depender*))))
 
 (defn dependency-drop [used caller]
   (mut-set! caller :useds (disj (c-useds caller) used))
@@ -243,21 +243,6 @@ rule to get once behavior or just when fm-traversing to find someone"
 
 ;;---
 
-#?(:clj
-   (comment
-     (defn filter-vector-func [coll ?s]
-       (reduce
-        (fn [x y]
-          (prn :y y)
-          (let [{:keys [id name surname]} y]
-            (prn :keys id name surname)
-            (if (str/includes? (str/lower-case name) (str/lower-case ?s))
-              (conj x id name)
-              x)))
-        []
-        coll))
-     (filter-vector-func {:id 1 :name "ali" :surname "veli"} "a")))
-
 (defn md-prop-owning? [_class-name _prop-name]
   ;; hhack
   false)
@@ -271,16 +256,16 @@ rule to get once behavior or just when fm-traversing to find someone"
          (and (coll? dbg) (some #{tag} dbg))))))
 
 (defn minfo [me]
-  (cond
-    *mx-minfo* (do
-                 (assert (fn? *mx-minfo*))
-                 (*mx-minfo* me))
-    :else (cond
-            (nil? me) :NIL-MD
-            (not (any-ref? me)) :NOT-ANY-REF
-            (not (md-ref? me)) :NOT-MD
-            :else [(or (:name @me) :anon)
-                   (meta me)])))
+  (if *mx-minfo*
+    (do
+      (assert (fn? *mx-minfo*))
+      (*mx-minfo* me))
+    (cond
+      (nil? me) :NIL-MD
+      (not (any-ref? me)) :NOT-ANY-REF
+      (not (md-ref? me)) :NOT-MD
+      :else [(or (:name @me) :anon)
+             (meta me)])))
 
 (defn cinfo [c]
   (cond
@@ -299,10 +284,9 @@ rule to get once behavior or just when fm-traversing to find someone"
 
 (defn cdbg [c tag & bits]
   (when c
-    (assert (or (= c true)
-                (c-ref? c)) (str "cdbg> passed non c-ref? " tag (if (any-ref? c)
-                                                                  @c c)))
-    (assert (keyword? tag) (str "cdbg> second parame s/b keyword tag, got: " tag))
+    (assert (or (= c true) (c-ref? c))
+            (str "cdbg> passed non c-ref? " tag (if (any-ref? c) @c c)))
+    (assert (keyword? tag)
+            (str "cdbg> second parame s/b keyword tag, got: " tag))
     (when (or (= c true) (:debug @c))
-      (prn)
       (apply prn :cdbg> tag :cinfo (cinfo c) bits))))

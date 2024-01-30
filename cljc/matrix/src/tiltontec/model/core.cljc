@@ -1,11 +1,8 @@
 (ns tiltontec.model.core
   {:clj-kondo/ignore [:redundant-do]}
-  #?(:cljs (:require-macros
-            [tiltontec.model.core :refer [cFkids with-par]]))
+  #?(:cljs (:require-macros [tiltontec.model.core :refer [cFkids with-par]]))
   (:require
-   #?(:cljs [tiltontec.cell.core
-             :refer-macros [cF]
-             :refer [c-reset!]]
+   #?(:cljs [tiltontec.cell.core :refer-macros [cF] :refer [c-reset!]]
       :clj  [tiltontec.cell.core :refer [c-reset! cF]])
    [clojure.set :refer [difference]]
    [tiltontec.cell.base
@@ -16,10 +13,8 @@
    [tiltontec.cell.integrity :refer [with-integrity]]
    [tiltontec.cell.poly :refer [md-quiesce md-quiesce-self watch]]
    [tiltontec.model.base :refer [md-awaken md-cell md-install-cell]]
-   [tiltontec.util.base
-    :refer [mx-sid-next mx-type trx]]
-   [tiltontec.util.core
-    :refer [any-ref? err rmap-meta-setf]]))
+   [tiltontec.util.base :refer [mx-sid-next mx-type trx]]
+   [tiltontec.util.core :refer [any-ref? err rmap-meta-setf]]))
 
 (def matrix
   "Each app will populate this with the root of its application matrix."
@@ -28,23 +23,6 @@
 (defn md-name [me]
   (:name @me))
 
-(defn mget [me prop]
-  (assert me (str "mget passed nil for me accessing prop: " prop))
-  (assert (any-ref? me) (str "mget passed non-model for me accessing prop: " prop ": " me))
-  (if (not (contains? @me prop))
-    (do                                                     ;(prn :mget>nosuchprop!!! prop :me @me)
-      (err str
-           "MXAPI_ILLEGAL_GET_NO_SUCH_prop> mget was attempted on non-existent prop \"" prop "\"."
-           "\n...> FYI: known props are" (keys @me)
-           "\n...> FYI: use mget? if prop might not exist."))
-    (let [dbg? false]
-      (when dbg?
-        (prn :mget-sees-c? (cinfo (md-cell me prop)))
-        (prn :me-prop (prop @me)))
-      (if-let [c (md-cell me prop)]
-        (cget c)
-        (prop @me)))))
-
 (defn mget?
   ([me prop]
    (mget? me prop nil))
@@ -52,8 +30,23 @@
    (assert me (str "mget passed nil for me accessing prop: " prop))
    (assert (any-ref? me) (str "mget passed non-model for me accessing prop: " prop ": " me))
    (if (contains? @me prop)
-     (mget me prop)
+     (if-let [c (md-cell me prop)]
+       (do
+         (when (and (c-ref? c) (:debug @c))
+           (prn :mget-sees-c? (cinfo (md-cell me prop)))
+           (prn :me-prop (prop @me)))
+         (cget c))
+       (prop @me))
      alt-val)))
+
+(defn mget [me prop]
+  (let [v (mget? me prop ::no-such-prop)]
+    (when (= v ::no-such-prop)
+      (err str
+           "MXAPI_ILLEGAL_GET_NO_SUCH_prop> mget was attempted on non-existent prop \"" prop "\"."
+           "\n...> FYI: known props are" (keys @me)
+           "\n...> FYI: use mget? if prop might not exist."))
+    v))
 
 (defmacro def-mget [reader-prefix & props]
   `(do
@@ -74,22 +67,19 @@
   ;; (println :md-reset prop )
   (assert me)
   (if-let [c (md-cell me prop)]
-    (do
-      (c-reset! c new-value))
-    (do
-      (if (contains? @me prop)
-        (do
-          (err str
-               "MXAPI_ILLEGAL_MUTATE_NONCELL> invalid mswap!/mset!/mset! to the property '" prop "', which is not mediated by any cell.\n"
-               "...> if such post-make mutation is in fact required, wrap the initial argument to model.core/make in 'cI'. eg: (make... :answer (cI 42)).\n"
-               "...> look for MXAPI_ILLEGAL_MUTATE_NONCELL in the Errors documentation for  more details.\n"
-               "...> FYI: intended new value is [" new-value "]; initial value was [" (get @me prop :no-such-prop) "].\n"
-               "...> FYI: instance is of type " (mx-type me) ".\n"
-               "...> FYI: full instance is " @me "\n"
-               "...> FYI: instance meta is " (meta me) "\n."))
-        (err str
-             "MXAPI_ILLEGAL_MUTATE_NO_SUCH_prop> mswap!/mset!/mset! was attempted to non-existent prop \"" prop "\".\n"
-             "...> FYI: known props are" (keys @me))))))
+    (c-reset! c new-value)
+    (if (contains? @me prop)
+      (err str
+           "MXAPI_ILLEGAL_MUTATE_NONCELL> invalid mswap!/mset!/mset! to the property '" prop "', which is not mediated by any cell.\n"
+           "...> if such post-make mutation is in fact required, wrap the initial argument to model.core/make in 'cI'. eg: (make... :answer (cI 42)).\n"
+           "...> look for MXAPI_ILLEGAL_MUTATE_NONCELL in the Errors documentation for  more details.\n"
+           "...> FYI: intended new value is [" new-value "]; initial value was [" (get @me prop :no-such-prop) "].\n"
+           "...> FYI: instance is of type " (mx-type me) ".\n"
+           "...> FYI: full instance is " @me "\n"
+           "...> FYI: instance meta is " (meta me) "\n.")
+      (err str
+           "MXAPI_ILLEGAL_MUTATE_NO_SUCH_prop> mswap!/mset!/mset! was attempted to non-existent prop \"" prop "\".\n"
+           "...> FYI: known props are" (keys @me)))))
 
 (defn mreset!
   "alternate syntax conforming with clojure terminology"
@@ -100,41 +90,28 @@
   (mset! me prop (apply swap-fn (mget me prop) swap-fn-args)))
 
 (defn make [& arg-list]
-  (cond
-    (odd? (count arg-list)) (apply make :mx-type arg-list)
-    :else
+  (if (odd? (count arg-list))
+    (apply make :mx-type arg-list)
     (#?(:clj dosync :cljs do)
-      ;;(println :md-making (nth arg-list 1))
      (let [iargs (apply hash-map arg-list)
            meta-keys #{:mx-type :on-quiesce}
+           iargs-without-meta (apply dissoc iargs meta-keys)
            me (#?(:clj ref :cljs atom)
-               (merge {:parent *parent*}
-                      (->> arg-list
-                           (partition 2)
-                           (filter (fn [[prop _v]]
-                                     (not (some #{prop} meta-keys))))
-                           (map (fn [[k v]]
-                                  (vector k (if (c-ref? v)
-                                              unbound
-                                              v))))
-                           (into {})))
-               :meta {::cty/state      :nascent
-                      :mx-sid        (mx-sid-next)
+               (->> iargs-without-meta
+                    (map (fn [[k v]] [k (if (c-ref? v) unbound v)]))
+                    (into {:parent *parent*}))
+               :meta {::cty/state :nascent
+                      :mx-sid     (mx-sid-next)
                       :mx-type    (get iargs :mx-type ::cty/model)
-                      :on-quiesce (get iargs :on-quiesce)})]
-       (assert (meta me))
+                      :on-quiesce (get iargs :on-quiesce)})
+           cz (->> iargs-without-meta
+                   (filter (fn [[prop v]] (md-install-cell me prop v)))
+                   (map vec)
+                   (into {}))]
 
-       (rmap-meta-setf
-        [:cz me]
-        (->> arg-list
-             (partition 2)
-             (filter (fn [[prop v]]
-                       (when-not (some #{prop} meta-keys)
-                         (md-install-cell me prop v))))
-             (map vec)
-             (into {})))
+       (rmap-meta-setf [:cz me] cz)
 
-       (with-integrity (:awaken me)
+       (with-integrity [:awaken me]
          (md-awaken me))
 
        me))))
@@ -336,20 +313,20 @@
   "Search matrix ascendents from node 'where' looking for element with given name"
   [where name]
   (fm-navig #(= name (mget? % :name))
-            where :me? false :up? true :inside? false))
+    where :me? false :up? true :inside? false))
 
 (defmacro fmu [name & [me]]
   "Search matrix ascendents from node 'me' (defaulting to 'me in current scope) looking for element with given name"
   (let [me-ref (or me 'me)]
     `(let [name# ~name]
        (fm-navig #(= name# (mget? % :name))
-                 ~me-ref :me? false :up? true :inside? false))))
+         ~me-ref :me? false :up? true :inside? false))))
 
 (defn mxu-find-id
   "Search matrix ascendents from node 'where' looking for element with given id"
   [where id]
   (fm-navig #(= id (mget? % :id))
-            where :me? false :up? true :inside? false))
+    where :me? false :up? true :inside? false))
 
 (defn mxu-find-type
   "Search matrix ascendants from node 'me' for first with given tag"
@@ -363,14 +340,14 @@
   [where class]
   (fm-navig #(when (any-ref? %)
                (= class (mget? % :class)))
-            where :inside? true :up? false))
+    where :inside? true :up? false))
 
 (defn mxi-find
   "Search matrix descendents from node 'where' for node with property and value"
   [where property value]
   (fm-navig #(when (any-ref? %)
                (= value (mget? % property)))
-            where :inside? true :up? false))
+    where :inside? true :up? false))
 
 (defn fmo
   "Search matrix ascendents from node 'me' for 'id-name', trying first as a name, then as an id"

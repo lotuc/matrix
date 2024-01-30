@@ -1,5 +1,4 @@
 (ns tiltontec.cell.core
-  {:clj-kondo/ignore [:redundant-do]}
   (:require
    #?(:clj
       [tiltontec.cell.integrity :refer [ufb-add with-integrity]]
@@ -29,18 +28,18 @@
     :model :synaptic? :synapse-id
     :code :rule :async? :and-then :debug :on-quiesce})
 
-(defn c-options-canonicalize [options allowed]
-  (loop [[k v & more] options
-         res nil]
-    (cond
-      (nil? k) (reverse res)
-      :else (do
+(partition 2 [1 2 3 4])
+
+(defn- c-options-canonicalize [options allowed]
+  (assert (even? (count options)))
+  (->> (partition 2 options)
+       (map (fn [[k v]]
               (assert (some #{k} allowed) (str "Cell option invalid: " k ". Only allowed are: " allowed))
-              (recur more (conj res k v))))))
+              [k v]))
+       (into {})))
 
 (defn make-cell [& kvs]
-  (let [options (apply hash-map (c-options-canonicalize kvs
-                                                        +valid-input-options+))]
+  (let [options (c-options-canonicalize kvs +valid-input-options+)]
     (#?(:clj ref :cljs atom)
      (merge {:mx-sid             (mx-sid-next) ;; debug aid
              :value              unbound
@@ -49,38 +48,39 @@
              :pulse-last-changed nil
              :pulse-watched      nil
              :callers            #{}
-             :synapses           #{}                       ;; these stay around between evaluations
-              ;; todo: if a rule branches away from a synapse
-              ;;       it needs to be GCed so it starts fresh
-             :lazy               false                     ;; not a predicate (can hold, inter alia, :until-asked)
+             ;; these stay around between evaluations
+             :synapses           #{}
+             ;; todo: if a rule branches away from a synapse
+             ;;       it needs to be GCed so it starts fresh
+             :lazy               false ;; not a predicate (can hold, inter alia, :until-asked)
              :ephemeral?         false
              :input?             true}
             options)
-      ;; type goes in meta to be consistent with model
+     ;; type goes in meta to be consistent with model
      :meta {:mx-type :tiltontec.cell.base/cell})))
 
 (defn make-c-formula [& kvs]
-  (let [options (apply hash-map (c-options-canonicalize kvs
-                                                        +valid-formula-options+))
+  (let [options (c-options-canonicalize kvs +valid-formula-options+)
         rule (:rule options)]
     (assert rule)
     (assert (fn? rule))
-
-    (#?(:clj ref :cljs atom) (merge {:value              unbound
-                                     :mx-sid             (mx-sid-next)
-                                     ::cty/state         :nascent ;; s/b :unbound?
-                                     :pulse              nil
-                                     :pulse-last-changed nil
-                                     :pulse-watched      nil
-                                     :callers            #{}
-                                     :useds              #{}
-                                     :lazy               false
-                                     :ephemeral?         false
-                                     :optimize           true ;; this can also be :when-not-nil
-                                     :input?             false} ;; not redundant: can start with rule, continue as input
-
-                                    options)
-                             :meta {:mx-type :tiltontec.cell.base/c-formula})))
+    (#?(:clj ref :cljs atom)
+     (merge {:value              unbound
+             :mx-sid             (mx-sid-next)
+             ::cty/state         :nascent ;; s/b :unbound?
+             :pulse              nil
+             :pulse-last-changed nil
+             :pulse-watched      nil
+             :callers            #{}
+             :useds              #{}
+             :lazy               false
+             :ephemeral?         false
+             ;; this can also be :when-not-nil
+             :optimize           true
+             ;; not redundant: can start with rule, continue as input
+             :input?             false}
+            options)
+     :meta {:mx-type :tiltontec.cell.base/c-formula})))
 
 ;;___________________ constructors _______________________________
 ;; I seem to have created a zillion of these, but I normally
@@ -284,11 +284,9 @@
     (c-value-assume c new-value nil)
     ;-------------------------------------------
     :else
-    (do                                                     ;; tufte/p :wi-cvassume-sync
-      (#?(:clj dosync :cljs do)
-       (with-integrity (:change (c-prop c))
-          ;;(prn :inside-wi!!!-cval-assuming new-value)
-         (c-value-assume c new-value nil))))))
+    (#?(:clj dosync :cljs do)
+     (with-integrity [:change (c-prop c)]
+       (c-value-assume c new-value nil)))))
 
 (defn c-reset! [c new-value]
   (cset! c new-value))

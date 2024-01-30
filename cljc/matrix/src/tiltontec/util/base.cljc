@@ -1,8 +1,7 @@
 (ns tiltontec.util.base
   #?(:cljs (:require-macros [tiltontec.util.base
                              :refer [wtrx trx prog1 b-when unless def-rmap-props def-rmap-meta-props]]))
-  #?(:clj (:require
-           [clojure.string :as str])))
+  #?(:clj (:require [clojure.string :as str])))
 
 #?(:cljs (enable-console-print!))
 

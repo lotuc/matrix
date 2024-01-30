@@ -6,16 +6,12 @@
                                with-mx-trace with-minfo with-minfo-std
                                with-integrity]]))
   (:require
-   #?(:cljs [tiltontec.util.base :as ubase]
-      :clj  [tiltontec.util.base :as ubase])
-   #?(:cljs [tiltontec.cell.core :as c]
-      :clj  [tiltontec.cell.core :as c])
+   [tiltontec.util.base :as ubase]
+   [tiltontec.cell.core :as c]
    [tiltontec.cell.base :as cb]
    [tiltontec.cell.diagnostic :as diag]
    [tiltontec.model.core :as md]
    [tiltontec.util.core :as ucore]))
-
-
 
 (defn prx [tag & bits]
   (apply ubase/prx tag bits))
@@ -95,7 +91,7 @@
   "Syntax sugar for formulae that define :kids props"
   [& tree]
   `(cF (assert ~'me "no me for cFkids")
-     (the-kids ~@tree)))
+       (the-kids ~@tree)))
 
 (defmacro with-par [meform & body]
   `(binding [tiltontec.model.core/*parent* ~meform]
@@ -210,7 +206,7 @@ call parameters: prop, me, new, old, and c."
   (let [me-ref (or me 'me)]
     `(let [name# ~name]
        (tiltontec.model.core/fm-navig #(= name# (tiltontec.model.core/mget? % :name))
-                                      ~me-ref :me? false :up? true :inside? false))))
+         ~me-ref :me? false :up? true :inside? false))))
 
 (defn fm!
   "Search matrix ascendents and descendents from node 'where', for 'what', throwing an error when not found"
