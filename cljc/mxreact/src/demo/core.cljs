@@ -10,6 +10,8 @@
    [tiltontec.matrix.api :as mx]
    [tiltontec.model.core :as md]))
 
+(set! *print-level* 3)
+
 (defonce app-dom-node (js/document.getElementById "app"))
 (defonce app-react-root (createRoot app-dom-node))
 
@@ -44,12 +46,10 @@
 (defn ^:dev/after-load start []
   (comment
     (render-root-element (mxr/$ demo.slider/App))
-    (render-matrix-app todomvc/demo)
+    (render-matrix-app todomvc/TodoMVC)
     (render-matrix-app x100-hello-world/app)
 
     (render-matrix-app demo.list/MatrixApp)
     (render-root-element (mxr/$ demo.list/ReactApp)))
 
-  ;; (render-matrix-app todomvc/demo)
-  ;; (render-matrix-app demo.list/MatrixApp)
-  (render-root-element (mxr/$ demo.list/ReactApp)))
+  (render-matrix-app x100-hello-world/app))

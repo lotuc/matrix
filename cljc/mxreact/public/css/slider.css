@@ -2,27 +2,20 @@
   width: 100%;
   max-width: 500px;
   height: 50px;
-  background: yellow;
   margin: 20px auto;
-}
-.slider {
-  width: 100%;
-  max-width: 500px;
-  height: 150vh;
-  margin: auto;
+  border: 1px solid #000;
 }
 .example-thumb {
   cursor: pointer;
   position: absolute;
   z-index: 100;
-  background: #ffffff;
   border: 5px solid #3774ff;
   border-radius: 100%;
   display: block;
-  box-shadow: 0 0 2px 0 rgb(0 0 0 / 44%);
+  box-shadow: 0 0 1px 0 rgb(0 0 0 / 44%);
 }
 .example-thumb.active {
-  background-color: grey;
+  background-color: #3774ff;
 }
 .example-track {
   position: relative;

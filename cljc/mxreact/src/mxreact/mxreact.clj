@@ -69,21 +69,27 @@
                                         (str mapkid#)))))
                                  (clojure.core/filter some?)))))))
 
-(defmacro mkc [react-component mx-props jsx-props & kids]
-  `(tiltontec.matrix.api/make
-    :mxreact.mxreact/matrixrn.elt
-    :sid (swap! mxreact.mxreact/sid-latest inc)
-    ~@(when (seq kids) `(:kids (tiltontec.matrix.api/cFkids ~@kids)))
-    :react-element ~(mk-react-element-with-kids react-component jsx-props)
-    ~@(apply concat (into [] mx-props))))
+(defmacro mkc [react-component jsx-props & kids]
+  (let [[mx-props kids] (if (map? (first kids))
+                          [(first kids) (rest kids)]
+                          [{} kids])]
+    `(tiltontec.matrix.api/make
+      :mxreact.mxreact/matrixrn.elt
+      :sid (swap! mxreact.mxreact/sid-latest inc)
+      ~@(when (seq kids) `(:kids (tiltontec.matrix.api/cFkids ~@kids)))
+      :react-element ~(mk-react-element-with-kids react-component jsx-props)
+      ~@(apply concat (into [] mx-props)))))
 
-(defmacro mk [node-type mx-props jsx-props & kids]
-  `(tiltontec.matrix.api/make
-    :mxreact.mxreact/matrixrn.elt
-    :sid (swap! mxreact.mxreact/sid-latest inc)
-    ~@(when (seq kids) `(:kids (tiltontec.matrix.api/cFkids ~@kids)))
-    :react-element ~(mk-react-element-with-kids `(name ~node-type) jsx-props)
-    ~@(apply concat (into [] mx-props))))
+(defmacro mk [node-type jsx-props & kids]
+  (let [[mx-props kids] (if (map? (first kids))
+                          [(first kids) (rest kids)]
+                          [{} kids])]
+    `(tiltontec.matrix.api/make
+      :mxreact.mxreact/matrixrn.elt
+      :sid (swap! mxreact.mxreact/sid-latest inc)
+      ~@(when (seq kids) `(:kids (tiltontec.matrix.api/cFkids ~@kids)))
+      :react-element ~(mk-react-element-with-kids `(name ~node-type) jsx-props)
+      ~@(apply concat (into [] mx-props)))))
 
 (declare
  input textarea option select a abbr address area article aside audio b base bdi

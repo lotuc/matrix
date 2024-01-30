@@ -10,24 +10,23 @@
   (mx/make ::list
            :rx-dom
            (mx/cFonce
-            (mxr/div {:name :list :count (mx/cI 10)}
-                     {}
-                     (mxr/input {:c (mx/cF (mx/mget (mx/fmu :list) :count))}
-                                {:style box-style
+            (mxr/div {} {:name :list :count (mx/cI 10)}
+                     (mxr/input {:style box-style
                                  :value (mx/mget me :c)
                                  :onChange #(when-some [n (try (parse-long (.-value (.-target %)))
                                                                (catch js/Error _))]
-                                              (mx/mset! (mxr/fmu :list) :count n))})
-                     (mxr/button {} {:style box-style
-                                     :onClick #(mx/mswap! (mxr/fmu :list) :count inc)} "+")
-                     (mxr/button {} {:style box-style
-                                     :onClick #(mx/mswap! (mxr/fmu :list) :count dec)} "-")
+                                              (mx/mset! (mxr/fmu :list) :count n))}
+                                {:c (mx/cF (mx/mget (mx/fmu :list) :count))})
+                     (mxr/button {:style box-style
+                                  :onClick #(mx/mswap! (mxr/fmu :list) :count inc)} "+")
+                     (mxr/button {:style box-style
+                                  :onClick #(mx/mswap! (mxr/fmu :list) :count dec)} "-")
                      (mxr/div
+                      {:style {:display "flex" :flexWrap "wrap"}}
                       {:kid-values (mx/cF (doall (range (mx/mget (mx/fmu :list) :count))))
                        :kid-key #(mx/mget % :key)
                        :kid-factory (fn [_ kid-val]
-                                      (mxr/span {:key kid-val} {:style {:marginLeft "5px"}} "item" kid-val))}
-                      {:style {:display "flex" :flexWrap "wrap"}}
+                                      (mxr/span {:style {:marginLeft "5px"}} {:key kid-val} "item" kid-val))}
                       (mx/kid-values-kids me _cache))))))
 
 (defn ReactApp
