@@ -80,6 +80,10 @@
       :react-element ~(mk-react-element-with-kids react-component jsx-props)
       ~@(apply concat (into [] mx-props)))))
 
+(defmacro mk-reagent [reagent-component jsx-props & kids]
+  `(let [c# (reagent.core/reactify-component ~reagent-component)]
+     (mkc c# ~jsx-props ~@kids)))
+
 (defmacro mk [node-type jsx-props & kids]
   (let [[mx-props kids] (if (map? (first kids))
                           [(first kids) (rest kids)]

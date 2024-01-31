@@ -12,6 +12,9 @@
 (def sid-latest (atom 0))
 (def rendering-sid-latest (atom 0))
 
+;; You can chooose to populate this with the root of your application's matrix.
+(defonce matrix (atom nil))
+
 (defn mxweb-init! []
   (reset! sid-latest 0)
   (reset! rendering-sid-latest 0))
