@@ -1,10 +1,8 @@
 (ns tiltontec.util.core
+  #?(:cljs (:require-macros [tiltontec.util.core :refer [pr-warn]]))
   (:require
-   #?(:cljs [tiltontec.util.base :as utm
-             :refer-macros [wtrx]]
-      :clj  [tiltontec.util.base :as utm
-             :refer [wtrx]])
-   [clojure.string :as str]))
+   #?(:clj [tiltontec.util.base :refer [prog1]]
+      :cljs [tiltontec.util.base :refer-macros [prog1]])))
 
 (defn type-of [x] (type x))
 
@@ -12,7 +10,7 @@
   (or (and a (not b))
       (and b (not a))))
 
-(declare pln xpln)
+(declare throw-ex)
 
 (defn set-ify [x]
   (cond
@@ -23,6 +21,19 @@
 (defn cl-find [sought coll]
   (when-not (nil? sought)
     (some #{sought} coll)))
+
+(def ^:dynamic *disable-warnings* false)
+
+(comment
+  #?(:clj (alter-var-root #'*disable-warnings* (constantly true))
+     :cljs (set! *disable-warnings* true)))
+
+(defmacro pr-warn [& args]
+  ;; make sure we don't stackoverflow on printing recursive structures
+  `(binding [*print-level* (or *print-level* 1)]
+     (when-not *disable-warnings*
+       #?(:clj (locking *out* (println (apply str "WARNING: " (list ~@args))))
+          :cljs (js/console.log (apply str "WARNING: " (list ~@args)))))))
 
 #?(:cljs
    (defn uuidv4 []
@@ -51,14 +62,14 @@
   ([mut prop new-value] (mut-set! mut prop new-value nil))
   ([mut prop new-value tag]
    (when-not (any-ref? mut)
-     (pln "model.util.core/rmap-setf> prop:" prop :tag tag
-          "new-value:" new-value
-          "failed assertion any-ref? on ref:" mut)
+     (pr-warn "model.util.core/mut-set!> prop:" prop :tag tag
+              "new-value:" new-value
+              "failed assertion any-ref? on ref:" mut)
      (assert false "see console"))
    (when-not (map? @mut)
-     (pln "model.util.core/rmap-setf> prop:" prop :tag tag
-          "new-value:" (or new-value :NIL)
-          "failed assertion map? on ref:" @mut)
+     (pr-warn "model.util.core/mut-set!> prop:" prop :tag tag
+              "new-value:" (or new-value :NIL)
+              "failed assertion map? on ref:" @mut)
      (assert false "see console"))
    (#?(:clj alter :cljs swap!) mut assoc prop new-value)
    new-value))
@@ -67,47 +78,30 @@
   ([[prop ref] new-value]
    (rmap-setf [prop ref] new-value nil))
   ([[prop ref] new-value tag]
-   (assert (any-ref? ref)
-           (pln "model.util.core/rmap-setf> prop:" prop :tag tag
-                "new-value:" new-value
-                "failed assertion any-ref? on ref:" ref))
+   (when-not (any-ref? ref)
+     (pr-warn "model.util.core/rmap-setf> prop:" prop :tag tag
+              "new-value:" new-value
+              "failed assertion any-ref? on ref:" ref)
+     (throw-ex "model.util.core/rmap-setf" {:ref ref :prop prop :tag tag}))
    (when-not (map? @ref)
-     (pln "model.util.core/rmap-setf> prop:" prop :tag tag
-          "new-value:" (or new-value :NIL)
-          "failed assertion map? on ref:" @ref)
-     (assert false))
+     (pr-warn "model.util.core/rmap-setf> prop:" prop :tag tag
+              "new-value:" (or new-value :NIL)
+              "failed assertion map? on ref:" @ref)
+     (throw-ex "model.util.core/rmap-setf" {:ref ref :prop prop :tag tag}))
    (#?(:clj alter :cljs swap!) ref assoc prop new-value)
    new-value))
 
 (defn rmap-meta-setf [[prop ref] new-value]
   (assert (meta ref))
   (alter-meta! ref assoc prop new-value)
-  ;;(prn :altermeta!! prop new-value)
   new-value)
+
 ;; --- error handling -----------------
 
-;; todo lose this altogether
-(defmulti err (fn [a1 & _args] (fn? a1)))
-
-(defmethod err true [fn & mas]
-  (err (apply fn mas)))
-
-(defmethod err :default [& bits]
-  (throw (#?(:cljs js/Error. :clj Exception.)
-          (str/join " " (cons "mxerr>" bits)))))
-
-(defn flz [x]
-  (if (isa? (type x) #?(:cljs cljs.core.LazySeq
-                        :clj  clojure.lang.LazySeq))
-    (vec (doall x))
-    x))
-#_(flz (map even? [1 2 3]))
-
-(defn wtrx-test [n]
-  (wtrx
-   (0 10 "test" n)
-   (when (> n 0)
-     (wtrx-test (dec n)))))
+(defn throw-ex
+  ([msg] (throw (ex-info msg {})))
+  ([msg map] (throw (ex-info msg map)))
+  ([msg map cause] (throw (ex-info msg map cause))))
 
 ;; --- deftest support ---------------------
 ;; These next two are lame because they just
@@ -142,7 +136,7 @@
   (#?(:clj alter :cljs swap!) q conj new))
 (defn fifo-pop [q]
   (when-not (fifo-empty? q)
-    (utm/prog1
+    (prog1
      (first @q)
      (#?(:clj alter :cljs swap!) q subvec 1))))
 
@@ -150,25 +144,6 @@
 
 (defn ensure-vec [x]
   (if (coll? x) (vec x) [x]))
-
-(defn pln [& args]
-  (locking *out*
-    (println (str/join " " args))))
-
-(defn xpln [& _args])
-
-(defn eko [key value]
-  (pln :eko!!! key value)
-  value)
-
-(def ^:dynamic *plnk-keys* [])
-
-(defn plnk [k & r]
-  (if (string? (first r))
-    (println (pr-str r))
-    (when (or (= k :force)
-              (some #{k} [*plnk-keys*]))                      ;; [:qxme :addk])
-      (println (pr-str r)))))
 
 (defn now []
   #?(:clj  (System/currentTimeMillis)
@@ -191,9 +166,10 @@
        (swap! counts update-in path (fnil + 0) n))
      (countit [path] n))))
 
-(do (counts-reset)
-    ;; (swap! counts update-in [:a :c] (fnil + 0) 1)
-    (countit [:a :b] 7)
-    (countit (list :a :b) 3)
-    (countit :x 2)
-    (countit :y [1 2 3 4]))
+(comment
+  (do (counts-reset)
+      ;; (swap! counts update-in [:a :c] (fnil + 0) 1)
+      (countit [:a :b] 7)
+      (countit (list :a :b) 3)
+      (countit :x 2)
+      (countit :y [1 2 3 4])))

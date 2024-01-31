@@ -16,15 +16,16 @@
             c-md-name c-me c-model c-optimize c-optimized-away? c-prop
             c-prop-name c-pulse c-pulse-last-changed c-pulse-unwatched?
             c-pulse-watched c-ref? c-rule c-state c-synaptic? c-unbound?
-            c-useds c-valid? c-value c-value-state dependency-drop
+            c-useds c-valid? c-value c-value-state c-warn dependency-drop
             dependency-record md-prop-owning? mdead? unlink-from-callers
-            unlink-from-used without-c-dependency] :as cty]
-   [tiltontec.cell.diagnostic :refer [c-debug? mxtrc-cell cinfo minfo mxtrc]]
+            unlink-from-used without-c-dependency]
+    :as cty]
+   [tiltontec.cell.diagnostic :refer [c-debug? cinfo minfo mxtrc mxtrc-cell]]
    [tiltontec.cell.poly :refer [c-awaken md-quiesce md-quiesce-self
                                 unchanged-test]]
    [tiltontec.cell.watch :refer [c-watch]]
    [tiltontec.util.core
-    :refer [any-ref? err rmap-meta-setf rmap-setf set-ify]]))
+    :refer [any-ref? rmap-meta-setf rmap-setf set-ify throw-ex]]))
 
 (defn ephemeral-reset [rc]
   ;; (trx :eph-reset?????? (:prop @rc)(:ephemeral? @rc))
@@ -61,8 +62,7 @@
       (c-unbound? c)
       (do
         (trx :unbound!!! c-prop)
-        (err "evic> unbound prop %s of model %s"
-             (c-prop c) (c-model c)))
+        (throw-ex "evic> unbound prop %s of model %s" {:cell c}))
 
       (c-valid? c) ;; probably accomplishes nothing
       (c-value c))
@@ -83,7 +83,7 @@
     ;; --- above we had valid values so did not care. now... -------
     (when-let [md (c-model c)]
       (mdead? md))
-    (err #?(:clj format :cljs str) "evic> model %s of cell %s is dead" (c-model c) c)
+    (throw-ex "evic> model of cell is dead" {:cell c})
 
     ;; --- no more early exits  -------------------
     (or (not (c-valid? c))
@@ -192,18 +192,18 @@
   [c]
   (when (some #{c} *call-stack*)
     (let [prop (c-prop-name c)]
-      (err str
-           "MXAPI_COMPUTE_CYCLE_DETECTED> cyclic dependency detected while computing prop '"
-           prop "' of model '" (c-md-name c) "'.\n"
-           "...> formula for " prop ":\n"
-           (c-code$ c)
-           "\n...> full cell: \n"
-           @c
-           "\n\n...> callstack, latest first: \n"
-           (str/join "\n" (mapv (fn [cd]
-                                  (str "....> md-name:" (c-md-name cd) " prop: " (c-prop-name cd)
-                                       "\n....>    code:" (c-code$ cd)))
-                                *call-stack*)))))
+      (c-warn "MXAPI_COMPUTE_CYCLE_DETECTED> cyclic dependency detected while computing prop '"
+              prop "' of model '" (c-md-name c) "'.\n"
+              "...> formula for " prop ":\n"
+              (c-code$ c)
+              "\n...> full cell: \n"
+              @c
+              "\n\n...> callstack, latest first: \n"
+              (str/join "\n" (mapv (fn [cd]
+                                     (str "....> md-name:" (c-md-name cd) " prop: " (c-prop-name cd)
+                                          "\n....>    code:" (c-code$ cd)))
+                                   *call-stack*)))
+      (throw-ex "MXAPI_COMPUTE_CYCLE_DETECTED> cyclic dependency detected while computing cell" {:cell c})))
 
   (binding [*call-stack* (cons c *call-stack*)
             *depender* c
@@ -262,7 +262,6 @@
 (defn md-prop-value-store [me prop value]
   (assert me)
   (assert (any-ref? me))
-  ;(trx :mdsv-store prop (flz value))
   (rmap-setf [prop me] value))
 
 (defn c-value-assume

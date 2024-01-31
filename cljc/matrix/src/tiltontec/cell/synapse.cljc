@@ -6,6 +6,8 @@
              :refer [*depender* c-synapses dependency-record]])
    #?(:clj [tiltontec.cell.core :refer [c-fn make-c-formula]]
       :cljs [tiltontec.cell.core :refer [make-c-formula]])
+   #?(:clj [tiltontec.cell.diagnostic :refer [mxtrc]]
+      :cljs [tiltontec.cell.diagnostic :refer-macros [mxtrc]])
    [tiltontec.cell.evaluate :refer [ensure-value-is-current]]
    [tiltontec.cell.integrity]
    [tiltontec.util.core :refer [rmap-setf]]))
@@ -22,7 +24,7 @@
 
                       (let [new-syn#
                             (let [~@closure-bindings]
-                              ;; (println :making-syn!? (:prop @*depender*))
+                              ;; (mxtrc :making-syn!? :depender (:prop @*depender*))
                               (make-c-formula
                                :model (:model @*depender*)
                                :prop ~synapse-id
@@ -30,17 +32,17 @@
                                :code '~body
                                :synaptic? true
                                :rule (c-fn ~@body)))]
-                        ;;(println :built-synapse!!!!!!!!!!!!!!!! ~synapse-id @new-syn#)
+                        ;; (mxtrc :built-synapse!!!!!!!!!!!!!!!! :synapse-id ~synapse-id :new-syn @new-syn#)
                         (rmap-setf [:synapses *depender*]
                                    (conj (c-synapses *depender*) new-syn#))
                         (dependency-record new-syn#)        ;; needed?!!!!
-                        ;; (println :made-syn!!!!!!!!!!!! @new-syn#)
+                        ;; (mxtrc :made-syn!!!!!!!!!!!! :new-syn @new-syn#)
                         new-syn#))
 
          value# (tiltontec.cell.integrity/with-integrity ()
-                  ;; (println :with-syn-ensure-syn-value (nil? existing-syn#))
+                  ;; (mxtrx :with-syn-ensure-syn-value :existing-syn-nil? (nil? existing-syn#))
                   (ensure-value-is-current synapse# :synapse *depender*))]
-     ;;(println :synapse-returns ~synapse-id :useds (doall (map c-prop (c-useds synapse#))))
+     ;; (mxtrx :synapse-returns :synapse-id ~synapse-id :useds (doall (map c-prop (c-useds synapse#))))
      ;; (cpr :syn-ret-value!!!!!! (map #(:uri (deref %)) value#))
      (dependency-record synapse#)
      value#))
@@ -49,7 +51,7 @@
   (let [existing-syn (existing-syn synapse-id)
         synapse (or existing-syn
                     (let [new-syn (cell-factory)]
-                      (println :building-synapse ~synapse-id)
+                      (mxtrc :building-synapse :synapse-id ~synapse-id)
                       (rmap-setf [:synapses *depender*]
                                  (conj (c-synapses *depender*) new-syn))
                       (dependency-record new-syn)           ;; needed?!!!!

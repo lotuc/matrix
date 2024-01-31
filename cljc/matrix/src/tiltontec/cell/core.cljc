@@ -10,12 +10,12 @@
             *defer-changes* *depender* *dp-log* *one-pulse?* *pulse* *quiesce*
             *unfinished-business* *within-integrity* c-async? c-callers
             c-input? c-lazy c-md-name c-model c-prop c-prop-name c-useds
-            c-value pulse-initial unbound unfin-biz-build without-c-dependency] :as cty]
+            c-value pulse-initial unbound unfin-biz-build without-c-dependency
+            c-warn]
+    :as cty]
    [tiltontec.cell.evaluate :refer [c-value-assume cget]]
-   [tiltontec.util.base
-    :refer [mx-sid-next mx-type]]
-   [tiltontec.util.core
-    :refer [err rmap-setf]]))
+   [tiltontec.util.base :refer [mx-sid-next mx-type]]
+   [tiltontec.util.core :refer [throw-ex rmap-setf]]))
 
 ; todo: stand-alone cells with watchs should be watched when they are made
 
@@ -252,24 +252,23 @@
   [c new-value]
   (assert c)
   (assert (not (c-async? c)) (str "attempt to cset! cfuture " @c))
-
-  (cond
-    (not (c-input? c))
+  (when (not (c-input? c))
     (let [me (c-model c)]
-      (err str
-           "MXAPI_ILLEGAL_MUTATE_NONINPUT_CELL> invalid mswap!/mset!/mset! to the property '" (c-prop-name c) "', which is not mediated by an input cell.\n"
-           "..> if such post-make mutation is in fact required, wrap the initial argument to model.core/make in 'cI', 'cFn', or 'cF+n'. eg: (make... :answer (cFn <computation>)).\n"
-           "..> look for MXAPI_ILLEGAL_MUTATE_NONINPUT_CELL in the Matrix Errors documentation for  more details.\n"
-           "..> FYI: intended new value is [" new-value "].\n"
-           "..> FYI: the non-input cell is " @c "\n"
-           "..> FYI: instance is of type " (mx-type me) ".\n"
-           "..> FYI: full instance is " @me "\n"
-           "..> FYI: instance meta is " (meta me) "\n."))
-
-    *defer-changes*
+      (c-warn
+       "MXAPI_ILLEGAL_MUTATE_NONINPUT_CELL> invalid mswap!/mset!/mset! to the property '" (c-prop-name c) "', which is not mediated by an input cell.\n"
+       "..> if such post-make mutation is in fact required, wrap the initial argument to model.core/make in 'cI', 'cFn', or 'cF+n'. eg: (make... :answer (cFn <computation>)).\n"
+       "..> look for MXAPI_ILLEGAL_MUTATE_NONINPUT_CELL in the Matrix Errors documentation for  more details.\n"
+       "..> FYI: intended new value is [" new-value "].\n"
+       "..> FYI: the non-input cell is " @c "\n"
+       "..> FYI: instance is of type " (mx-type me) ".\n"
+       "..> FYI: full instance is " @me "\n"
+       "..> FYI: instance meta is " (meta me) "\n.")
+      (throw-ex "invalid cset! to non-input cell"
+                {:cell c :new-value new-value})))
+  (when *defer-changes*
     (let [prop (c-prop-name c)
           me (c-model c)]
-      (err
+      (c-warn
        "MXAPI_UNDEFERRED_CHANGE> undeferred mswap!/mset!/mset! to the property '" prop "' by an watch detected."
        "...> such mutations must be wrapped by WITH-INTEGRITY, must conveniently with macro WITH-CC."
        "...> look for MXAPI_UNDEFERRED_CHANGE in the Errors documentation for  more details.\n"
@@ -277,13 +276,11 @@
        "...> FYI: instance is of type " (mx-type me) ".\n"
        "...> FYI: full instance is " @me "\n"
        "...> FYI: instance meta is " (meta me) "\n.")
-      #_(err (cl-format true "MXAPI_UNDEFERRED_CHANGE> change to ~s must be deferred by wrapping it in WITH-INTEGRITY"
-                        (c-prop c))))
-    ;-----------------------------------
-    (some #{(c-lazy c)} [:once-asked :always true])
+      (throw-ex "change to must be deferred by wrapping it in WITH-INTEGRITY"
+                {:cell c :new-value new-value})))
+
+  (if (some #{(c-lazy c)} [:once-asked :always true])
     (c-value-assume c new-value nil)
-    ;-------------------------------------------
-    :else
     (#?(:clj dosync :cljs do)
      (with-integrity [:change (c-prop c)]
        (c-value-assume c new-value nil)))))

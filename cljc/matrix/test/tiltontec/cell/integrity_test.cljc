@@ -14,7 +14,7 @@
       :clj  [tiltontec.cell.core :refer [c-reset! c-reset-next! cF cF+ cI cset! with-mx]])
    [tiltontec.cell.evaluate :refer [cget cget]]
    [tiltontec.matrix.api :refer [fn-watch]]
-   [tiltontec.util.core :refer [err]]))
+   [tiltontec.util.core :refer [throw-ex]]))
 
 (defn prn-level-3 [f]
   (binding [*print-level* 3] (f)))
@@ -36,7 +36,7 @@
                                              (case new
                                                :home :off
                                                :away :on
-                                               (err #?(:clj format :cljs str) "unexpected loc %s" new)))))]
+                                               (throw-ex "unexpected loc" {:new new})))))]
                    (case (cget act)
                      :leave :away
                      :return :home
@@ -70,7 +70,7 @@
                               (c-reset-next! alarm (case new
                                                      :home :off
                                                      :away :on
-                                                     (err #?(:clj format :cljs str) "unexpected loc %s" new)))))]
+                                                     (throw-ex "unexpected loc" {:new new})))))]
                    (case (cget act)
                      :leave :away
                      :return :home

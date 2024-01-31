@@ -8,7 +8,13 @@
              :refer-macros [def-rmap-props]]
       :clj  [tiltontec.util.base :as utm
              :refer [def-rmap-props mx-type?]])
-   [tiltontec.util.core :refer [any-ref? mut-set!] :as ut]))
+   #?(:clj [tiltontec.util.core
+            :refer [any-ref? mut-set! pr-warn]
+            :as ut]
+      :cljs [tiltontec.util.core
+             :refer [any-ref? mut-set!]
+             :refer-macros [pr-warn]
+             :as ut])))
 
 ;; --- the Cells beef -----------------------
 (defn pulse-initial []
@@ -112,12 +118,12 @@ rule to get once behavior or just when fm-traversing to find someone"
   (str tag "ustack> " (vec (map (fn [c] (:prop @c)) *call-stack*))))
 
 (defn c-break [& args]
-  (when-not +stop+
-    (println #_ut/err (str args))))
+  (when-not @+stop+
+    (ut/throw-ex "c-break" {:args args})))
 
-(defn c-warn [& args]
-  (when-not +stop+
-    (println (apply str "WARNING: " args))))
+(defmacro c-warn [& args]
+  `(when-not @+stop+
+     (pr-warn ~@args)))
 
 ;; ------------------------------------------------------
 

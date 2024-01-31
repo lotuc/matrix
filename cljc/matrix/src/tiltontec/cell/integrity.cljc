@@ -9,7 +9,7 @@
     :refer [*defer-changes* *dp-log* *one-pulse?* *pulse*
             *unfinished-business* *within-integrity* +client-q-handler+
             c-optimized-away? c-pulse un-stopped]]
-   [tiltontec.util.core :refer [err fifo-add fifo-peek fifo-pop]]))
+   [tiltontec.util.core :refer [fifo-add fifo-peek fifo-pop throw-ex]]))
 
 ;; --- the pulse ------------------------------
 
@@ -40,15 +40,14 @@
 
 (defn ufb-queue [opcode]
   (or (opcode *unfinished-business*)
-      (err (str "ufb-queue> opcode unknown: " opcode))))
+      (throw-ex "ufb-queue> opcode unknown" {:opcode opcode})))
 
 (defn ufb-add [opcode continuation]
   (fifo-add (ufb-queue opcode) continuation))
 
 (defn ufb-assert-q-empty [opcode]
   (if-let [uqp (fifo-peek (ufb-queue opcode))]
-    (err (str "ufb queue %s not empty, viz %s")
-         opcode uqp)
+    (throw-ex "ufb queue not empty" {:opcode opcode :uqp uqp})
     true))
 
 ;; --- the ufb and integrity beef ----------------------
@@ -135,7 +134,6 @@
          ;; in the place, but if the SETF is deferred we return
          ;; something that will help someone who tries to use
          ;; the setf'ed value figure out what is going on:
-         ;; (pln :cwi-defers opcode (first (ensure-vec defer-info)))
         (ufb-add opcode [defer-info action]))
 
        ;; thus by not supplying an opcode one can get something

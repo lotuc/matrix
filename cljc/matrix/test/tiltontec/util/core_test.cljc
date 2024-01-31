@@ -4,19 +4,14 @@
              :refer-macros [deftest is are use-fixtures]]
       :clj [clojure.test :refer :all])
    #?(:cljs [tiltontec.util.base :as utm
-             :refer-macros [trx def-rmap-props]]
+             :refer-macros [trx def-rmap-props wtrx]]
       :clj [tiltontec.util.base :as utm
             :refer [*trxdepth* def-rmap-props trx wtrx]])
-   #?(:cljs [tiltontec.util.core
-             :refer [any-ref? err fifo-add fifo-data fifo-empty? fifo-peek
-                     fifo-pop ia-ref make-fifo-queue rmap-setf set-ify
-                     wtrx-test]
-             :as ut]
-      :clj [tiltontec.util.core
-            :refer [any-ref? err fifo-add fifo-data fifo-empty? fifo-peek
-                    fifo-pop ia-ref make-fifo-queue rmap-setf set-ify]
-            :as ut])
-   [clojure.set :as cset]))
+   [clojure.set :as cset]
+   [tiltontec.util.core
+    :refer [any-ref? fifo-add fifo-data fifo-empty? fifo-peek fifo-pop ia-ref
+            make-fifo-queue rmap-setf set-ify throw-ex]
+    :as ut]))
 
 (defn prn-level-3 [f]
   (binding [*print-level* 3] (f)))
@@ -63,22 +58,25 @@
           (= 43 j)))
     (is (= 44 (#?(:clj dosync :cljs do) (rmap-setf [:value x] 44))))))
 
+(defn wtrx-test [n]
+  (wtrx
+   (0 10 "test" n)
+   (when (> n 0)
+     (wtrx-test (dec n)))))
+
 (deftest err-handling
   (is (thrown? #?(:cljs js/Error :clj Exception)
-               (err "boom")))
+               (throw-ex "boom")))
   (is (thrown-with-msg?
        #?(:cljs js/Error :clj Exception)
        #"oom"
-       (err str "boom")))
+       (throw-ex "boom")))
 
-  (is (thrown-with-msg?
-       #?(:cljs js/Error :clj Exception)
-       #"Hi mom"
-       (err str "Hi " 'mom)))
   (are [x] (not (any-ref? x))
     nil
     42
     [])
+
   #?(:clj
      (is (= "...... cool: 1, 2, 3\n:bingo\n"
             (with-out-str

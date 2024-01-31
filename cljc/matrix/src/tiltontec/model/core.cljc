@@ -6,15 +6,16 @@
       :clj  [tiltontec.cell.core :refer [c-reset! cF]])
    [clojure.set :refer [difference]]
    [tiltontec.cell.base
-    :refer [*depender* c-ref? md-ref? mdead? unbound without-c-dependency]
+    :refer [*depender* c-ref? c-warn md-ref? mdead? unbound
+            without-c-dependency]
     :as cty]
-   [tiltontec.cell.diagnostic :refer [mxtrc cinfo minfo]]
+   [tiltontec.cell.diagnostic :refer [cinfo minfo mxtrc mxtrc-cell]]
    [tiltontec.cell.evaluate :refer [cget]]
    [tiltontec.cell.integrity :refer [with-integrity]]
    [tiltontec.cell.poly :refer [md-quiesce md-quiesce-self watch]]
    [tiltontec.model.base :refer [md-awaken md-cell md-install-cell]]
    [tiltontec.util.base :refer [mx-sid-next mx-type trx]]
-   [tiltontec.util.core :refer [any-ref? err rmap-meta-setf]]))
+   [tiltontec.util.core :refer [any-ref? rmap-meta-setf throw-ex]]))
 
 (def matrix
   "Each app will populate this with the root of its application matrix."
@@ -32,9 +33,7 @@
    (if (contains? @me prop)
      (if-let [c (md-cell me prop)]
        (do
-         (when (and (c-ref? c) (:debug @c))
-           (prn :mget-sees-c? (cinfo (md-cell me prop)))
-           (prn :me-prop (prop @me)))
+         (mxtrc-cell c :mget-sees-c? :model me :prop prop :cinfo (cinfo (md-cell me prop)))
          (cget c))
        (prop @me))
      alt-val)))
@@ -42,10 +41,11 @@
 (defn mget [me prop]
   (let [v (mget? me prop ::no-such-prop)]
     (when (= v ::no-such-prop)
-      (err str
-           "MXAPI_ILLEGAL_GET_NO_SUCH_prop> mget was attempted on non-existent prop \"" prop "\"."
-           "\n...> FYI: known props are" (keys @me)
-           "\n...> FYI: use mget? if prop might not exist."))
+      (c-warn
+       "MXAPI_ILLEGAL_GET_NO_SUCH_prop> mget was attempted on non-existent prop \"" prop "\"."
+       "\n...> FYI: known props are" (keys @me)
+       "\n...> FYI: use mget? if prop might not exist.")
+      (throw-ex "MXAPI_ILLEGAL_GET_NO_SUCH_prop> mget was attempted on non-existent prop" {:model me :prop prop}))
     v))
 
 (defmacro def-mget [reader-prefix & props]
@@ -64,22 +64,24 @@
 ;;; --- accessors ----
 
 (defn mset! [me prop new-value]
-  ;; (println :md-reset prop )
   (assert me)
   (if-let [c (md-cell me prop)]
     (c-reset! c new-value)
-    (if (contains? @me prop)
-      (err str
-           "MXAPI_ILLEGAL_MUTATE_NONCELL> invalid mswap!/mset!/mset! to the property '" prop "', which is not mediated by any cell.\n"
-           "...> if such post-make mutation is in fact required, wrap the initial argument to model.core/make in 'cI'. eg: (make... :answer (cI 42)).\n"
-           "...> look for MXAPI_ILLEGAL_MUTATE_NONCELL in the Errors documentation for  more details.\n"
-           "...> FYI: intended new value is [" new-value "]; initial value was [" (get @me prop :no-such-prop) "].\n"
-           "...> FYI: instance is of type " (mx-type me) ".\n"
-           "...> FYI: full instance is " @me "\n"
-           "...> FYI: instance meta is " (meta me) "\n.")
-      (err str
-           "MXAPI_ILLEGAL_MUTATE_NO_SUCH_prop> mswap!/mset!/mset! was attempted to non-existent prop \"" prop "\".\n"
-           "...> FYI: known props are" (keys @me)))))
+    (throw-ex
+     (if (contains? @me prop)
+       (do (c-warn
+            "MXAPI_ILLEGAL_MUTATE_NONCELL> invalid mswap!/mset!/mset! to the property '" prop "', which is not mediated by any cell.\n"
+            "...> if such post-make mutation is in fact required, wrap the initial argument to model.core/make in 'cI'. eg: (make... :answer (cI 42)).\n"
+            "...> look for MXAPI_ILLEGAL_MUTATE_NONCELL in the Errors documentation for  more details.\n"
+            "...> FYI: intended new value is [" new-value "]; initial value was [" (get @me prop :no-such-prop) "].\n"
+            "...> FYI: instance is of type " (mx-type me) ".\n"
+            "...> FYI: full instance is " @me "\n"
+            "...> FYI: instance meta is " (meta me) "\n.")
+           "MXAPI_ILLEGAL_MUTATE_NONCELL> invalid mswap!/mset!/mset! to the property which is not mediated by any cell")
+       (do (c-warn "MXAPI_ILLEGAL_MUTATE_NO_SUCH_prop> mswap!/mset!/mset! was attempted to non-existent prop \"" prop "\".\n"
+                   "...> FYI: known props are" (keys @me))
+           "MXAPI_ILLEGAL_MUTATE_NO_SUCH_prop> mswap!/mset!/mset! was attempted to non-existent prop"))
+     {:model me :prop :prop :new-value new-value})))
 
 (defn mreset!
   "alternate syntax conforming with clojure terminology"
@@ -124,17 +126,14 @@
 
 (defn fm-kids-watch [me newk oldk _c]
   (when-not (= oldk unbound)
-    ;;(prn :fm-kids-watch)
     (let [lostks (difference (set oldk) (set newk))]
       (when-not (empty? lostks)
         (mxtrc :quiesce :fm-kids-watch (minfo me) :lostks (count lostks))
         (doseq [k lostks]
-          ;;(prn :watch-k-not2be!! k)
           (md-quiesce k))))))
 
 (defmethod watch [:kids ::family]
   [_prop me newk oldk c]
-  ;;(prn :watcherve-kids-family-method)
   (fm-kids-watch me newk oldk c))
 
 (defmethod md-quiesce ::family
@@ -172,20 +171,25 @@
   [seek poss]
   (assert (or (any-ref? poss) (string? poss))
           (str "poss not ref " (string? poss)))
-  ;; (println :fm-navig= (fn? seek) (keyword? seek))
+  (mxtrc :fm-navig= :fn?-seek (fn? seek) :keyword?-seek (keyword? seek))
   (cond
-    (not (any-ref? poss))                                   ;; string child of html label?
-    (do (println :fm-navig=bailnotref poss)
+    ;; string child of html label?
+    (not (any-ref? poss))
+    (do (mxtrc :fm-navig=bailnotref :poss poss)
         false)
 
-    (fn? seek) (do                                          ;; (println :trying-fn)
-                 (seek poss))
-    (keyword? seek) (do
-                      ;; (trx :fm-navig=sees seek (:name @poss) (mx-type poss))
-                      (or (= seek (:name @poss))
-                          (isa? (mx-type poss) seek)))
-    :else (do (trx :fm-navig=-else-pplain=! seek)
-              (= seek poss))))
+    (fn? seek)
+    (do (mxtrc :fm-navig=trying-fn)
+        (seek poss))
+
+    (keyword? seek)
+    (do (mxtrc :fm-navig=sees :seek seek :poss-name (:name @poss) :poss-mx-type (mx-type poss))
+        (or (= seek (:name @poss))
+            (isa? (mx-type poss) seek)))
+
+    :else
+    (do (mxtrc :fm-navig=-else-pplain=! :seek seek)
+        (= seek poss))))
 
 (defn fasc-higher [what where options]
   (assert where (str "fasc-higher> 'where' arg is nil seeking " what :options options))
@@ -220,19 +224,18 @@
       (binding [*depender* (if (:wocd? options) nil *depender*)]
         (or (fasc-higher what where options)
             (when (:must? options)
-              (prn :fasc-failed what :from  (minfo where) :options options)
+              (mxtrc :fasc-failed :what what :from (minfo where) :options options)
               (when (and (not (:me? options))
                          (fm-navig= what where))
-                (prn :fasc-failed-with-me?-option-false-but-me-matches-what!!!!!!!!))
+                (mxtrc :fasc-failed-with-me?-option-false-but-me-matches-what!!!!!!!!))
               (loop [md (if (:me? options) where (:parent @where))]
                 (when md
-                  (prn :fasc-fail-saw (minfo md))
+                  (mxtrc :fasc-fail-saw :from (minfo md))
                   (recur (:parent @md))))
-              (prn :fasc-failed-asc-end)
-            ;;(err :fasc-must-failed what where options)
+              (mxtrc :fasc-failed-asc-end)
               nil))))
     (catch #?(:clj Exception :cljs js/Error) e
-      (prn :fasc-sees-err-returns-nil e)
+      (mxtrc :fasc-sees-err-returns-nil :err e)
       nil)))
 
 (defn nextsib [mx]
@@ -263,17 +266,14 @@
    if :up? is true, invoke fm-navig on ancestor (skipping 'where')"
   {:style/indent 1}
   [what where & options]
-  ;;(println :fm-navig-entry (if (any-ref? where) [(:tag @where)(:class @where)] where) (any-ref? where))
+  ;; (mxtrc :fm-navig-entry :where (if (any-ref? where) [(:tag @where)(:class @where)] where) :any-ref?-where (any-ref? where))
   (when (and where what (any-ref? where))
-    ;(println :w)
-    (let [options (merge {:must? true :me? false, :inside? false, :up? true, :wocd? true ;; without-c-dependency
-                          }(apply hash-map options))]
-      ;;(println :fm-navig-opts options)
-      ;(println :T)
+    (let [options (merge {:must? true :me? false, :inside? false, :up? true,
+                           ;; without-c-dependency
+                          :wocd? true}
+                         (apply hash-map options))]
       (binding [*depender* (if (:wocd? options) nil *depender*)]
-
         (when (any-ref? where)
-          ;(println :f)
           (or (and (:me? options)
                    (fm-navig= what where)
                    where)
@@ -302,7 +302,8 @@
                                :inside? true)))
 
               (when (:must? options)
-                (err :fm-navig-must-failed what where options))))))))
+                (throw-ex "fm-navig: model not found"
+                          {:what what :where where :options options}))))))))
 
 (defn fm!
   "Search matrix ascendents and descendents from node 'where', for 'what', throwing an error when not found"
@@ -386,16 +387,13 @@
    This function maps across the :kids-values, invoking the factory as it goes"
   [me x-kids]
   (let [k-key (mget me :kid-key)
-        _ (assert k-key)
+        _ (assert k-key ":k-key not found")
+        k-factory (mget me :kid-factory)
+        _ (assert k-factory ":kid-factory not found.")
+
         x-kids (when (not= x-kids unbound)
                  (into {} (for [k x-kids]
-                            [(k-key k) k])))
-        k-factory (mget me :kid-factory)]
-    #_{:clj-kondo/ignore [:single-logical-operand]}
-    (assert (and k-factory))
-
-    #_(prn :kvk-loading (count (mget me :kid-values))
-           (map :hn-id (mget me :kid-values)))
+                            [(k-key k) k])))]
 
     (doall
      (map-indexed
