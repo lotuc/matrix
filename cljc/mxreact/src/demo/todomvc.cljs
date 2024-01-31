@@ -86,9 +86,9 @@
                                                  (set! (.-value (.-target %)) ""))))}
                         placeholder (assoc :placeholder placeholder)
                         default-value (assoc :defaultValue default-value)))
-           (mxr/label {:className "visually-hidden"} label)))
+           (mxr/label {:className "hidden"} label)))
 
-(defn header []
+(defn Header []
   (mxr/header
    {:className "header"}
    (mxr/h1 {} "todos")
@@ -97,28 +97,26 @@
            :label "New Todo Input"
            :placeholder "What needs to be done?"})))
 
-(defn item [{:keys [id title completed?]} {:keys [key]}]
-  (mxr/li (if completed? {:className "completed"} {})
-          {:key key}
-          (mxr/div {:className "view"}
-                   {:writable? (mx/cI false)}
-                   (let [toggle-wriable? #(mx/mswap! me :writable? not)]
-                     (if (mx/mget me :writable?)
-                       (Input {:on-blur toggle-wriable?
-                               :default-value title
-                               :on-submit #(do (if (= (count %) 0)
-                                                 (remove-todos! me id)
-                                                 (update-todos! me id %))
-                                               (toggle-wriable?))})
-                       [(mxr/input {:className "toggle" :type "checkbox" :checked completed?
-                                    :onChange #(toggle-todo! me id)})
-                        (mxr/label {:className "todo-item-label"
-                                    :onDoubleClick toggle-wriable?}
-                                   title)
-                        (mxr/button {:className "destroy"
-                                     :onClick #(remove-todos! me id)})])))))
+(defn Item [{:keys [id title completed?]}]
+  (mxr/div {:className "view"}
+           {:writable? (mx/cI false)}
+           (let [toggle-wriable? #(mx/mswap! me :writable? not)]
+             (if (mx/mget me :writable?)
+               (Input {:on-blur toggle-wriable?
+                       :default-value title
+                       :on-submit #(do (if (= (count %) 0)
+                                         (remove-todos! me id)
+                                         (update-todos! me id %))
+                                       (toggle-wriable?))})
+               [(mxr/input {:className "toggle" :type "checkbox" :checked completed?
+                            :onChange #(toggle-todo! me id)})
+                (mxr/label {:className "todo-item-label"
+                            :onDoubleClick toggle-wriable?}
+                           title)
+                (mxr/button {:className "destroy"
+                             :onClick #(remove-todos! me id)})]))))
 
-(defn main []
+(defn Main []
   (mxr/main {:className "main"}
             {:name :main
              :visible-todos (mx/cF (let [route-hash (router-hash me)
@@ -139,30 +137,30 @@
             (mxr/ul {:className "todo-list"}
                     {:kid-values (mx/cF (mx/mget (fmu :main) :visible-todos))
                      :kid-key #(mx/mget % :key)
-                     :kid-factory (fn [i todo] (item todo {:key i}))}
+                     :kid-factory (fn [_ {:keys [id completed?] :as todo}]
+                                    (mxr/li (if completed? {:className "completed"} {})
+                                            {:key id}
+                                            (Item todo)))}
                     (mx/kid-values-kids me _cache))))
 
 (defn footer []
   (mxr/footer
    {:className "footer"}
    {:name :footer
-    :counts (mx/cF (let [todos (todo-list me)]
-                     {:total (count todos)
-                      :active (count (filter (complement :completed?) todos))}))}
+    :active-count (mx/cF (count (filter :completed? (todo-list me))))}
    (mxr/span {:className "todo-count"}
-             (let [c (:active (mx/mget (fmu :footer) :counts))]
+             (let [c (mx/mget (fmu :footer) :active-count)]
                (str c " " (if (<= c 1) "item" "items") " left")))
    (mxr/ul {:className "filters"}
            (for [[href txt]  [["#/" "All"] ["#/active" "Active"] ["#/completed" "Completed"]]
                  :let [selected? (= href (router-hash me))
                        prop (merge (when selected? {:className "selected"}) {:href href})]]
              (mxr/li {} (mxr/a prop txt))))
-
    (mxr/button {:className "clear-completed"
                 :disabled (mx/mget me :disabled?)
                 :onClick #(remove-completed! me)}
-               {:disabled? (mx/cF (let [{:keys [total active]} (mx/mget (fmu :footer) :counts)]
-                                    (= total active)))}
+               {:disabled? (mx/cF (= (mx/cF (count (todo-list me)))
+                                     (mx/mget (fmu :footer) :active-count)))}
                "Clear completed")))
 
 (defn TodoMVC []
@@ -174,6 +172,6 @@
              (make-todo me)
              (make-router me)
 
-             (header)
-             (main)
+             (Header)
+             (Main)
              (footer)))))

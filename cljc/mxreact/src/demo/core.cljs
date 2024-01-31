@@ -1,7 +1,6 @@
 (ns demo.core
   (:require
    ["react-dom/client" :refer [createRoot]]
-   [demo.slider :as slider]
    [demo.todomvc :as todomvc]
    [demo.list]
    [demo.x100-hello-world :as x100-hello-world]
@@ -45,7 +44,6 @@
 #_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defn ^:dev/after-load start []
   (comment
-    (render-root-element (mxr/$ demo.slider/App))
     (render-matrix-app todomvc/TodoMVC)
     (render-matrix-app x100-hello-world/app)
 

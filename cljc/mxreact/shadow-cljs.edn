@@ -5,6 +5,7 @@
         :output-dir "public/js"
         :asset-path "/js"
         :modules {:app {:entries [demo.core]}}
+        :build-hooks [(shadow.html/copy-file "node_modules/todomvc-app-css/index.css" "public/css/todomvc.css")]
         :devtools {:http-root "public"
                    :http-port 8888
                    :reload-strategy :full

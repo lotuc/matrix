@@ -7,8 +7,6 @@
    [tiltontec.matrix.api :refer [fm-navig mget mget?] :as mx]
    [tiltontec.util.core]))
 
-;(def <> react/createElement)
-
 (defn ^js/React get-react [] react)
 
 (def sid-latest (atom 0))
@@ -34,7 +32,6 @@
 (defn ref-get [me]
   (get @refdict (mget me :sid)))
 (defn ref-unrecord [me]
-  ;; (mx/prx :ref-unrecord me)
   (when-some [sid (mget? me :sid)]
     (swap! refdict dissoc sid)))
 
@@ -49,7 +46,6 @@
 
 (defmethod md-quiesce :mxreact.mxreact/matrixrn.elt [me]
   ;; normally called by kids observer, but we shadow that
-  ;; (mx/prx :md-quiesce me)
   (set-state-unrecord me)
   (ref-unrecord me)
   (doseq [k (:kids @me) :when (mx/any-ref? k)]

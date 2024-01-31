@@ -1,5 +1,7 @@
 node_modules
 public/js
+public/css
+!public/css/slider.css
 /package-lock.json
 .shadow-cljs/
 /.cpcache
