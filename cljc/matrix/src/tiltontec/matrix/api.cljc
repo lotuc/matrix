@@ -4,7 +4,7 @@
                        :refer [with-mx without-c-dependency cf-freeze the-kids cFkids with-par
                                fn-watch cF cF+ cFn cF+n cFonce cF1 with-cc mpar fmu mdv!
                                with-mx-trace with-minfo with-minfo-std
-                               with-integrity]]))
+                               mxtrc with-integrity]]))
   (:require
    [tiltontec.util.base :as ubase]
    [tiltontec.cell.core :as c]
@@ -229,26 +229,25 @@ call parameters: prop, me, new, old, and c."
 ;;; --- debug --------------------------
 
 (defmacro with-mx-trace [target & body]
-  `(binding [cb/*mx-trace* ~target]
+  `(binding [diag/*mx-trace* ~target]
      ~@body))
 
-(defn mxtrc [& bits]
-  (apply diag/mxtrc bits))
+(defmacro mxtrc [tag & bits]
+  `(diag/mxtrc ~tag ~@bits))
 
 (defmacro with-minfo [minfo-body & body]
-  `(binding [cb/*mx-minfo* (fn [~'me]
-                             ~minfo-body)]
+  `(binding [diag/*mx-minfo* (fn [~'me] ~minfo-body)]
      ~@body))
 
 (defmacro as-ignored [expr]
   (list 'do (symbol "#_") expr))
 
 (defmacro with-minfo-std [& body]
-  `(binding [cb/*mx-minfo* nil]
+  `(binding [diag/*mx-minfo* nil]
      ~@body))
 
 (defn minfo [me]
-  (cb/minfo me))
+  (diag/minfo me))
 
 (defn cinfo [c]
-  (cb/cinfo c))
+  (diag/cinfo c))

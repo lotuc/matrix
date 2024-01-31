@@ -4,10 +4,10 @@
   (:require
    [#?(:cljs cljs.pprint :clj clojure.pprint) :refer [pprint]]
    #?(:cljs [tiltontec.util.base :as utm
-             :refer [mx-type mx-type?]
+             :refer [mx-type?]
              :refer-macros [def-rmap-props]]
       :clj  [tiltontec.util.base :as utm
-             :refer [def-rmap-props mx-type mx-type?]])
+             :refer [def-rmap-props mx-type?]])
    [tiltontec.util.core :refer [any-ref? mut-set!] :as ut]))
 
 ;; --- the Cells beef -----------------------
@@ -70,14 +70,6 @@ rule to get once behavior or just when fm-traversing to find someone"
 ;; --- debug stuff -----------------------------
 
 (def ^:dynamic *c-prop-depth* 0)
-
-;;; a collection of tags to be traced (checkout
-;;; `tiltontec.cell.diagnostic/mxtrc`)
-(def ^:dynamic *mx-trace* nil)
-
-;;; a function which receives model and returns debug info of it. checkout
-;;; `minfo` for its default.
-(def ^:dynamic *mx-minfo* nil)
 
 ;; emergency brake
 (def ^:dynamic +stop+ (atom false))
@@ -145,10 +137,6 @@ rule to get once behavior or just when fm-traversing to find someone"
   useds users callers optimize ephemeral? code
   lazy synapses synaptic? async?)
 
-(defn dpc [cell & bits]
-  (when (:debug @cell)
-    (apply prn bits)))
-
 (defn c-code$ [c]
   (with-out-str (binding [*print-level* 20]
                   (pprint (:code @c)))))
@@ -159,11 +147,7 @@ rule to get once behavior or just when fm-traversing to find someone"
     (:value @c)
     @c))
 
-(declare cdbg)
-
 (defn c-optimized-away? [c]
-  (when-not (c-ref? c)
-    (prn :caway-notc c (meta c)))
   (assert (c-ref? c) "c-awy?-got-not-c")
   (or (not (map? @c))
       (not (contains? @c ::state))
@@ -246,47 +230,3 @@ rule to get once behavior or just when fm-traversing to find someone"
 (defn md-prop-owning? [_class-name _prop-name]
   ;; hhack
   false)
-
-(defn c-debug?
-  ([c] (c-debug? c :annon))
-  ([c tag]
-   (when-let [dbg (:debug @c)]
-     (or (true? dbg)
-         (= dbg tag)
-         (and (coll? dbg) (some #{tag} dbg))))))
-
-(defn minfo [me]
-  (if *mx-minfo*
-    (do
-      (assert (fn? *mx-minfo*))
-      (*mx-minfo* me))
-    (cond
-      (nil? me) :NIL-MD
-      (not (any-ref? me)) :NOT-ANY-REF
-      (not (md-ref? me)) :NOT-MD
-      :else [(or (:name @me) :anon)
-             (meta me)])))
-
-(defn cinfo [c]
-  (cond
-    (nil? c) :NIL-C
-    (not (any-ref? c)) :NOT-ANY-REF-C
-    (not (c-ref? c)) :NOT-C-REF
-    :else [(c-prop-name c)
-           (c-md-name c)
-           (:mx-sid @c)
-           [:pulse (:pulse @c)]
-           [:val-state (c-value c) (c-value-state c)]
-           [:useds (count (:useds @c))
-            :callers (count (:callers @c))]
-           (mx-type c)
-           (c-async? c)]))
-
-(defn cdbg [c tag & bits]
-  (when c
-    (assert (or (= c true) (c-ref? c))
-            (str "cdbg> passed non c-ref? " tag (if (any-ref? c) @c c)))
-    (assert (keyword? tag)
-            (str "cdbg> second parame s/b keyword tag, got: " tag))
-    (when (or (= c true) (:debug @c))
-      (apply prn :cdbg> tag :cinfo (cinfo c) bits))))

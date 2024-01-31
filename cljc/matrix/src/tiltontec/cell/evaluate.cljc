@@ -12,14 +12,14 @@
    [tiltontec.cell.base
     :refer [*c-prop-depth* *call-stack* *causation* *custom-propagator*
             *defer-changes* *depender* *one-pulse?* *pulse* *quiesce*
-            c-callers c-code$ c-debug? c-ephemeral? c-formula? c-input? c-lazy
+            c-callers c-code$ c-ephemeral? c-formula? c-input? c-lazy
             c-md-name c-me c-model c-optimize c-optimized-away? c-prop
             c-prop-name c-pulse c-pulse-last-changed c-pulse-unwatched?
             c-pulse-watched c-ref? c-rule c-state c-synaptic? c-unbound?
-            c-useds c-valid? c-value c-value-state cdbg cinfo cinfo
-            dependency-drop dependency-record md-prop-owning? mdead? minfo
-            unlink-from-callers unlink-from-used without-c-dependency] :as cty]
-   [tiltontec.cell.diagnostic :refer [mxtrc]]
+            c-useds c-valid? c-value c-value-state dependency-drop
+            dependency-record md-prop-owning? mdead? unlink-from-callers
+            unlink-from-used without-c-dependency] :as cty]
+   [tiltontec.cell.diagnostic :refer [c-debug? mxtrc-cell cinfo minfo mxtrc]]
    [tiltontec.cell.poly :refer [c-awaken md-quiesce md-quiesce-self
                                 unchanged-test]]
    [tiltontec.cell.watch :refer [c-watch]]
@@ -98,16 +98,16 @@
     (let [calc-val (when-not (c-current? c)
                      ;; Q: how can it be current after above checks indicating not current?
                      ;; A: if dependent changed during above loop over used and its watch read/updated me
-                     (cdbg c :evic-sees-uncurrent)
+                     (mxtrc-cell c :evic-sees-uncurrent)
                      (calculate-and-set c :evic ensurer))]
-      (cdbg c :evic-returns calc-val)
+      (mxtrc-cell c :evic-returns :calc-val calc-val)
       (cget-value-as-is c))
 
     ;; we were behind the pulse but not affected by the changes that moved the pulse
     ;; record that we are current to avoid future checking:
     :else
     (do
-      (cdbg c :just-pulse-valid-uninfluenced)
+      (mxtrc-cell c :just-pulse-valid-uninfluenced)
       (c-pulse-update c :valid-uninfluenced)
       (c-value c))))
 
@@ -133,19 +133,19 @@
 
     :else
     (do
-      (cdbg c :cget-sees-integ cty/*within-integrity*)
+      (mxtrc-cell c :cget-sees-integ :within-interigity cty/*within-integrity*)
       (prog1
        (with-integrity []
          (assert (c-ref? c) "c lost c-refness")
          (let [prior-value (c-value c)]
-           (cdbg c :cget-core (mx-type (c-model c)))
+           (mxtrc-cell c :cget-core :mx-type (mx-type (c-model c)))
            (prog1
             (let [ci (cinfo c)
                   dbg? (c-debug? c :cget)
                   ev (ensure-value-is-current c :c-read nil)]
               (if (c-ref? c)
-                (cdbg c :cget-post-evic-val ev)
-                (cdbg dbg? :cget-evic-flushed-returns ev :ci-was ci))
+                (mxtrc-cell c :cget-post-evic-val :ensured-value ev)
+                (mxtrc-cell dbg? :cget-evic-flushed-returns :ensured-value ev :ci-was ci))
               ev)
 
             ;; this is new here, intended to awaken standalone cells JIT
@@ -167,7 +167,9 @@
   "Calculate, link, record, and propagate."
   [c dbgid _dbgdata]
   (let [[raw-value propagation-code] (calculate-and-link c)]
-    (cdbg c :post-cnlink-sees!!!! dbgid :opti (c-optimized-away? c) :prop (c-prop c) raw-value propagation-code)
+    (mxtrc-cell c :post-cnlink-sees!!!!
+                :dbgid dbgid :opti (c-optimized-away? c) :prop (c-prop c)
+                :raw-value raw-value :propagation-code propagation-code)
     ;; TODO: handling (c-async? c).
     (when-not (c-optimized-away? c)
       (assert (map? (deref c)) "calc-n-set")
@@ -176,7 +178,7 @@
       ;; re-exit will be of an optimized away cell, which will have been value-assumed
       ;; as part of the opti-away processing.
       ;; (trx :calc-n-set->assume raw-value)
-      (cdbg c :not-optimized!!!!!!!!!!!)
+      (mxtrc-cell c :not-optimized!!!!!!!!!!!)
       (c-value-assume c raw-value propagation-code))))
 
 (defn calculate-and-link
@@ -215,12 +217,12 @@
             prop-code? (and (c-synaptic? c)
                             (vector? raw-value)
                             (contains? (meta raw-value) :propagate))]
-        (cdbg c :cnlink-raw-val raw-value prop-code?)
+        (mxtrc-cell c :cnlink-raw-val :raw-value raw-value :prop-code? prop-code?)
         (if prop-code?
           [(first raw-value) (:propagate (meta raw-value))]
           [raw-value nil]))
       (catch #?(:clj Exception :cljs js/Error) e
-        (cdbg c :cnlink-emsg (.getMessage e))
+        (mxtrc-cell c :cnlink-emsg :emsg (.getMessage #?(:clj Exception :cljs js/Error) e))
         (throw e)))))
 
 ;;; --- awakening ------------------------------------
@@ -275,7 +277,7 @@
   [c new-value propagation-code]
 
   (assert (c-ref? c))
-  (cdbg c :cva-entry new-value propagation-code)
+  (mxtrc-cell c :cva-entry :new-value new-value :propagation-code propagation-code)
 
   (without-c-dependency
    (let [dbg? (c-debug? c)
@@ -293,7 +295,7 @@
      ;;
      (rmap-setf [:value c] new-value)
      (rmap-setf [::cty/state c] :awake)
-     (cdbg c :cva-new-value-installed new-value)
+     (mxtrc-cell c :cva-new-value-installed :new-value new-value)
 
      ;;
      ;; --- model maintenance ---
@@ -311,7 +313,7 @@
      ;; now that, with the :freeze option, we are doing "late" optimize-away
      (when (and (c-formula? c) (c-optimize c))
        (optimize-away?! c prior-value)
-       (cdbg c :cva-post-optimize-away))
+       (mxtrc-cell c :cva-post-optimize-away))
 
      (when (or (not (some #{prior-state} [:valid :uncurrent]))
                force-propagate? ;; forcing
@@ -320,10 +322,10 @@
        ;; --- something happened ---
        ;; --- data flow propagation -----------
        (let [optimized-away? (c-optimized-away? c)]
-         (cdbg c :cva-sth-happened propagation-code optimized-away?)
+         (mxtrc-cell c :cva-sth-happened :propagation-code propagation-code :optimized-away? optimized-away?)
          (when-not optimized-away?
            (assert (map? @c))
-           (cdbg dbg? :cva-calls-propagate (count callers) prior-value)
+           (mxtrc-cell dbg? :cva-calls-propagate :callers-count (count callers) :prior-value prior-value)
            (propagate c prior-value callers))))))
   new-value)
 
@@ -332,7 +334,7 @@
 (defn md-cell-flush [c]
   (assert (c-ref? c))
   (when-let [me (c-model c)]
-    (cdbg c :opti :md-cell-flush (cinfo c) :mi (minfo me))
+    (mxtrc-cell c :opti :md-cell-flush (cinfo c) :mi (minfo me))
     (rmap-meta-setf [:cells-flushed me]
                     (conj (:cells-flushed (meta me))
                           [(c-prop c) :val (c-value c) :pulse (c-pulse-watched c)]))))
@@ -361,7 +363,7 @@
              (not (c-synaptic? c))
              ;; yes, dependent cells can be inputp
              (not (c-input? c)))
-    (cdbg c :optimize-away)
+    (mxtrc-cell c :optimize-away)
     (when (= :freeze (c-optimize c))
       (unlink-from-used c :freeze))
 
@@ -371,15 +373,15 @@
     (when-let [me (c-model c)]
       (rmap-meta-setf [:cz me] (assoc (:cz (meta me)) (c-prop c) nil))
       (md-cell-flush c)
-      (cdbg c :optimize-away-post-flush))
+      (mxtrc-cell c :optimize-away-post-flush))
 
     ;; let callers know they need not check us for currency again
     (doseq [caller (seq (c-callers c))]
-      (cdbg c :optimized-away-runs-caller caller)
+      (mxtrc-cell c :optimized-away-runs-caller :caller caller)
       (ensure-value-is-current caller :opti-used c)
       (when-not (c-optimized-away? caller)
         (dependency-drop c caller)))
-    (cdbg c :optimized-away-resetting-cell-to-val (c-value c))
+    (mxtrc-cell c :optimized-away-resetting-cell-to-val :c-value (c-value c))
     (#?(:clj ref-set :cljs reset!) c (c-value c))))
 
 ;; --- c-quiesce -----------

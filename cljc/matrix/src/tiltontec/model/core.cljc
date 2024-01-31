@@ -6,9 +6,9 @@
       :clj  [tiltontec.cell.core :refer [c-reset! cF]])
    [clojure.set :refer [difference]]
    [tiltontec.cell.base
-    :refer [*depender* c-ref? cinfo md-ref? mdead? minfo unbound
-            without-c-dependency] :as cty]
-   [tiltontec.cell.diagnostic :refer [mxtrc]]
+    :refer [*depender* c-ref? md-ref? mdead? unbound without-c-dependency]
+    :as cty]
+   [tiltontec.cell.diagnostic :refer [mxtrc cinfo minfo]]
    [tiltontec.cell.evaluate :refer [cget]]
    [tiltontec.cell.integrity :refer [with-integrity]]
    [tiltontec.cell.poly :refer [md-quiesce md-quiesce-self watch]]
@@ -192,7 +192,7 @@
   (assert (not (mdead? where))
           (str "fasc-higher> reaches dead 'where' " (minfo where) :seeking what))
   (assert what (str "fasc-higher> 'what' arg is nil searching from " (minfo where) :options options))
-  (mxtrc :navig :fasc-higher :what what :where (minfo where))
+  (mxtrc :navig :action :fasc-higher :what what :where (minfo where))
   (or (and (:me? options)
            (fm-navig= what where)
            where)
@@ -211,7 +211,7 @@
   (assert (not (mdead? where))
           (str "fasc> pass dead 'where' " (minfo where) :seeking what))
   (assert what (str "fasc> 'what' arg is nil searching from " (minfo where) :options options))
-  (mxtrc :navig :fasc-entry :what what :where (minfo where))
+  (mxtrc :navig :action :fasc-entry :what what :where (minfo where))
   (try
     (let [options (merge {:me?   false
                           :wocd? true
