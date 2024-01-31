@@ -5,11 +5,6 @@
    [react]
    [tiltontec.matrix.api :refer-macros [mpar cF cFonce] :as mx]))
 
-;; The JS:
-;;    import ReactSlider from "react-slider";
-;; Various solutions:
-;;    fail ["react-slider" :refer [ReactSlider]]
-
 (defn Slider []
   (mxr/mkc ReactSlider
            {:className "horizontal-slider"
@@ -44,7 +39,7 @@
                       ;; All the following arguments are children
 
                       ;; children are flattened and nils removed, so this nested array is no problem.
-                     (for [msg ["Click the button, watch the title change. When you get to 42, the"
+                     (for [msg ["Click the button, watch the title change. When you get to 42, "
                                 "the button will be disabled."]]
                        (mxr/p {} msg))
 

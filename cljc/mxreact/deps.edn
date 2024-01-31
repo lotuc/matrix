@@ -3,4 +3,5 @@
         binaryage/devtools {:mvn/version "1.0.7"}
         thheller/shadow-cljs {:mvn/version "2.26.5"}
         tiltontec/matrix {:local/root "../matrix"}
-        cljs-http/cljs-http {:mvn/version "0.1.48"}}}
+        cljs-http/cljs-http {:mvn/version "0.1.48"}
+        reagent/reagent {:mvn/version "1.2.0"}}}

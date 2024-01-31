@@ -7,7 +7,8 @@
    [mxreact.mxreact :as mxr]
    [react]
    [tiltontec.matrix.api :as mx]
-   [tiltontec.model.core :as md]))
+   [tiltontec.model.core :as md]
+   [demo.reagent-interop :as reagent-interop]))
 
 (set! *print-level* 3)
 
@@ -21,7 +22,7 @@
 
 (defn matrix-build! [app]
   (reset! mxr/ssdict {})
-  (reset! md/matrix (app)))
+  (reset! mxr/matrix (app)))
 
 (defn render-matrix-app [app]
   (let [app-matrix (matrix-build! app)
@@ -48,6 +49,9 @@
     (render-matrix-app x100-hello-world/app)
 
     (render-matrix-app demo.list/MatrixApp)
-    (render-root-element (mxr/$ demo.list/ReactApp)))
+    (render-root-element (mxr/$ demo.list/ReactApp))
+
+    (render-root-element (reagent-interop/reagent-app))
+    (render-matrix-app reagent-interop/MatrixApp))
 
   (render-matrix-app x100-hello-world/app))
