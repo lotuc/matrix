@@ -205,8 +205,21 @@ call parameters: prop, me, new, old, and c."
   "Search matrix ascendents from node 'me' (defaulting to 'me in current scope) looking for element with given name"
   (let [me-ref (or me 'me)]
     `(let [name# ~name]
-       (tiltontec.model.core/fm-navig #(= name# (tiltontec.model.core/mget? % :name))
+       (tiltontec.model.core/fm-navig
+        (if (keyword? name#)
+          name#
+          #(= name# (tiltontec.model.core/mget? % :name)))
          ~me-ref :me? false :up? true :inside? false))))
+
+(defmacro fmuinc [name & [me]]
+  "`fmu` inclusive of the starting node `me`."
+  (let [me-ref (or me 'me)]
+    `(let [name# ~name]
+       (tiltontec.model.core/fm-navig
+        (if (keyword? name#)
+          name#
+          #(= name# (tiltontec.model.core/mget? % :name)))
+         ~me-ref :me? true :up? true :inside? false))))
 
 (defn fm!
   "Search matrix ascendents and descendents from node 'where', for 'what', throwing an error when not found"
