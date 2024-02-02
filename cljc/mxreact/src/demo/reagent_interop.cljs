@@ -43,33 +43,33 @@
         ;; https://github.com/reagent-project/reagent/blob/master/doc/ReactFeatures.md#hooks
         fc (fn [props] [:f> fc props])]
     (mxr/mk-reagent
-     fc
-     {:count-color (mx/mget me :count-color)
-      ;; Passing model into reagent component, we setup the reagent atom listen
-      ;; there with useEffect. Note that if we don't pass the model in, we can
-      ;; also lookup the model via app root (checkout `demo.core/matrix-build!`).
-      :mx-model me}
-     {:name :reagent-counting
-      :count (mx/cI nil)
-      :count-color (mx/cF (count-color (mx/mget me :count)))}
+      fc
+      {:count-color (mx/mget me :count-color)
+       ;; Passing model into reagent component, we setup the reagent atom listen
+       ;; there with useEffect. Note that if we don't pass the model in, we can
+       ;; also lookup the model via app root (checkout `demo.core/matrix-build!`).
+       :mx-model me}
+      {:name :reagent-counting
+       :count (mx/cI nil)
+       :count-color (mx/cF (count-color (mx/mget me :count)))}
 
      ;; The following children will be passing into the reagent component.
-     (mxr/p {:style {:fontWeight "400"}} "mxreact children")
-     (mxr/p {} "not reactive to reagent atom: " @click-count)
-     (mxr/p {:style {:color (mx/mget me :color)}}
-            {:color (mx/cF (mx/mget (mx/fmu :reagent-counting) :count-color))}
-            "reactive to mx model: " (mx/mget (mx/fmu :reagent-counting) :count)))))
+      (mxr/p {:style {:fontWeight "400"}} "mxreact children")
+      (mxr/p {} "not reactive to reagent atom: " @click-count)
+      (mxr/p {:style {:color (mx/mget me :color)}}
+        {:color (mx/cF (mx/mget (mx/fmu :reagent-counting) :count-color))}
+        "reactive to mx model: " (mx/mget (mx/fmu :reagent-counting) :count)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Matrix APP as top level & interact with reagent components
 (defn MatrixApp []
   (mx/make :mxreact/mxReactApp
-           :rx-dom
-           (cFonce
-            (mxr/div {}
-                     (mxr/p {:style {:fontSize "1.2rem"}}
-                            "Interop with Reagent")
-                     (MxCounting)))))
+    :rx-dom
+    (cFonce
+     (mxr/div {}
+       (mxr/p {:style {:fontSize "1.2rem"}}
+         "Interop with Reagent")
+       (MxCounting)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Reagent APP as top level & interact with matrix apps

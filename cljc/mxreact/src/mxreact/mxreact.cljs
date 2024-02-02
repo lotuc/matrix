@@ -42,10 +42,10 @@
   ([me name] (fm* me name true))
   ([me name must-find?]
    (fm-navig name me
-             :me? true
-             :inside? true
-             :up? true
-             :must? must-find?)))
+     :me? true
+     :inside? true
+     :up? true
+     :must? must-find?)))
 
 (defmethod md-quiesce :mxreact.mxreact/matrixrn.elt [me]
   ;; normally called by kids observer, but we shadow that

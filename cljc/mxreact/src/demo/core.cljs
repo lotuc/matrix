@@ -1,14 +1,14 @@
 (ns demo.core
   (:require
    ["react-dom/client" :refer [createRoot]]
-   [demo.todomvc :as todomvc]
    [demo.list]
+   [demo.reagent-interop :as reagent-interop]
+   [demo.todomvc :as todomvc]
    [demo.x100-hello-world :as x100-hello-world]
    [mxreact.mxreact :as mxr]
    [react]
    [tiltontec.matrix.api :as mx]
-   [tiltontec.model.core :as md]
-   [demo.reagent-interop :as reagent-interop]))
+   [tiltontec.model.core :as md]))
 
 (set! *print-level* 3)
 
@@ -37,10 +37,10 @@
   (mx/mget todo-list :value)
   ;; set! model's prop with mset!
   (mx/mset! todo-list :value [])
-  (mx/mset! (mxr/fm* (:rx-dom @@md/matrix) :todo-list)
-            :value (map (fn [i] {:id i :title (str "item" i)
-                                 :completed? false})
-                        (range 10))))
+  (mx/mset! (mxr/fm* (:rx-dom @@mxr/matrix) :todo-list)
+    :value (map (fn [i] {:id i :title (str "item" i)
+                         :completed? false})
+                (range 10))))
 
 #_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defn ^:dev/after-load start []

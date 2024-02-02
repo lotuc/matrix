@@ -61,117 +61,117 @@
 (defn make-router [parent]
   (mx/with-par parent
     (mx/make ::router
-             :name :router
-             :on-quiesce (fn [c]
-                           (js/window.navigation.removeEventListener
-                            "navigate" (mx/mget c :listener)))
-             :listener (mx/cFonce
-                        (let [cb (fn [e] (mx/mset! me :hash (.-hash (js/URL. (.-url (.-destination e))))))]
-                          (js/window.navigation.addEventListener "navigate" cb)
-                          cb))
-             :hash (mx/cI js/window.location.hash))))
+      :name :router
+      :on-quiesce (fn [me]
+                    (js/window.navigation.removeEventListener
+                     "navigate" (mx/mget me :listener)))
+      :listener (mx/cFonce
+                  (let [cb (fn [e] (mx/mset! me :hash (.-hash (js/URL. (.-url (.-destination e))))))]
+                    (js/window.navigation.addEventListener "navigate" cb)
+                    cb))
+      :hash (mx/cI js/window.location.hash))))
 (defn router-hash [me] (mx/mget (fmu :router me) :hash))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn Input [{:keys [placeholder default-value label on-submit on-blur]}]
   (mxr/div {:className "input-container"}
-           (mxr/input (cond-> {:className "new-todo" :id "todo-input" :type "text"
-                               :autoFocus true
-                               :onBlur (fn [_] (when on-blur (on-blur)))
-                               :onKeyDown #(when (= "Enter" (.-key %))
-                                             (let [v (.trim (.-value (.-target %)))]
-                                               (when (pos? (count v))
-                                                 (on-submit (sanitize v))
-                                                 (set! (.-value (.-target %)) ""))))}
-                        placeholder (assoc :placeholder placeholder)
-                        default-value (assoc :defaultValue default-value)))
-           (mxr/label {:className "hidden"} label)))
+    (mxr/input (cond-> {:className "new-todo" :id "todo-input" :type "text"
+                        :autoFocus true
+                        :onBlur (fn [_] (when on-blur (on-blur)))
+                        :onKeyDown #(when (= "Enter" (.-key %))
+                                      (let [v (.trim (.-value (.-target %)))]
+                                        (when (pos? (count v))
+                                          (on-submit (sanitize v))
+                                          (set! (.-value (.-target %)) ""))))}
+                 placeholder (assoc :placeholder placeholder)
+                 default-value (assoc :defaultValue default-value)))
+    (mxr/label {:className "hidden"} label)))
 
 (defn Header []
   (mxr/header
-   {:className "header"}
-   (mxr/h1 {} "todos")
-   (Input {:on-submit
-           (partial add-todo! me)
-           :label "New Todo Input"
-           :placeholder "What needs to be done?"})))
+    {:className "header"}
+    (mxr/h1 {} "todos")
+    (Input {:on-submit
+            (partial add-todo! me)
+            :label "New Todo Input"
+            :placeholder "What needs to be done?"})))
 
 (defn Item [{:keys [id title completed?]}]
   (mxr/div {:className "view"}
-           {:writable? (mx/cI false)}
-           (let [toggle-wriable? #(mx/mswap! me :writable? not)]
-             (if (mx/mget me :writable?)
-               (Input {:on-blur toggle-wriable?
-                       :default-value title
-                       :on-submit #(do (if (= (count %) 0)
-                                         (remove-todos! me id)
-                                         (update-todos! me id %))
-                                       (toggle-wriable?))})
-               [(mxr/input {:className "toggle" :type "checkbox" :checked completed?
-                            :onChange #(toggle-todo! me id)})
-                (mxr/label {:className "todo-item-label"
-                            :onDoubleClick toggle-wriable?}
-                           title)
-                (mxr/button {:className "destroy"
-                             :onClick #(remove-todos! me id)})]))))
+    {:writable? (mx/cI false)}
+    (let [toggle-wriable? #(mx/mswap! me :writable? not)]
+      (if (mx/mget me :writable?)
+        (Input {:on-blur toggle-wriable?
+                :default-value title
+                :on-submit #(do (if (= (count %) 0)
+                                  (remove-todos! me id)
+                                  (update-todos! me id %))
+                                (toggle-wriable?))})
+        [(mxr/input {:className "toggle" :type "checkbox" :checked completed?
+                     :onChange #(toggle-todo! me id)})
+         (mxr/label {:className "todo-item-label"
+                     :onDoubleClick toggle-wriable?}
+           title)
+         (mxr/button {:className "destroy"
+                      :onClick #(remove-todos! me id)})]))))
 
 (defn Main []
   (mxr/main {:className "main"}
-            {:name :main
-             :visible-todos (mx/cF (let [route-hash (router-hash me)
-                                         todos (todo-list me)]
-                                     (filter
-                                      (case route-hash
-                                        "#/active" (complement :completed?)
-                                        "#/completed" :completed?
-                                        (constantly true))
-                                      todos)))
-             :some-visible? (mx/cF (pos? (count (mx/mget me :visible-todos))))}
-            (when (mx/mget me :some-visible?)
-              (mxr/div {:className "toggle-all-container"}
-                       (mxr/input {:className "toggle-all" :type "checkbox"
-                                   :defaultChecked (every? :completed? (mx/mget (fmu :main) :visible-todos))
-                                   :onChange #(toggle-all! me (.-checked (.-target %)))})
-                       (mxr/label {:className "toggle-all-label"} "Toggle All Input")))
-            (mxr/ul {:className "todo-list"}
-                    {:kid-values (mx/cF (mx/mget (fmu :main) :visible-todos))
-                     :kid-key #(mx/mget % :key)
-                     :kid-factory (fn [_ {:keys [id completed?] :as todo}]
-                                    (mxr/li (if completed? {:className "completed"} {})
-                                            {:key id}
-                                            (Item todo)))}
-                    (mx/kid-values-kids me _cache))))
+    {:name :main
+     :visible-todos (mx/cF (let [route-hash (router-hash me)
+                                 todos (todo-list me)]
+                             (filter
+                              (case route-hash
+                                "#/active" (complement :completed?)
+                                "#/completed" :completed?
+                                (constantly true))
+                              todos)))
+     :some-visible? (mx/cF (pos? (count (mx/mget me :visible-todos))))}
+    (when (mx/mget me :some-visible?)
+      (mxr/div {:className "toggle-all-container"}
+        (mxr/input {:className "toggle-all" :type "checkbox"
+                    :defaultChecked (every? :completed? (mx/mget (fmu :main) :visible-todos))
+                    :onChange #(toggle-all! me (.-checked (.-target %)))})
+        (mxr/label {:className "toggle-all-label"} "Toggle All Input")))
+    (mxr/ul {:className "todo-list"}
+      {:kid-values (mx/cF (mx/mget (fmu :main) :visible-todos))
+       :kid-key #(mx/mget % :key)
+       :kid-factory (fn [_ {:keys [id completed?] :as todo}]
+                      (mxr/li (if completed? {:className "completed"} {})
+                        {:key id}
+                        (Item todo)))}
+      (mx/kid-values-kids me _cache))))
 
 (defn footer []
   (mxr/footer
-   {:className "footer"}
-   {:name :footer
-    :active-count (mx/cF (count (filter :completed? (todo-list me))))}
-   (mxr/span {:className "todo-count"}
-             (let [c (mx/mget (fmu :footer) :active-count)]
-               (str c " " (if (<= c 1) "item" "items") " left")))
-   (mxr/ul {:className "filters"}
-           (for [[href txt]  [["#/" "All"] ["#/active" "Active"] ["#/completed" "Completed"]]
-                 :let [selected? (= href (router-hash me))
-                       prop (merge (when selected? {:className "selected"}) {:href href})]]
-             (mxr/li {} (mxr/a prop txt))))
-   (mxr/button {:className "clear-completed"
-                :disabled (mx/mget me :disabled?)
-                :onClick #(remove-completed! me)}
-               {:disabled? (mx/cF (= (mx/cF (count (todo-list me)))
-                                     (mx/mget (fmu :footer) :active-count)))}
-               "Clear completed")))
+    {:className "footer"}
+    {:name :footer
+     :active-count (mx/cF (count (filter :completed? (todo-list me))))}
+    (mxr/span {:className "todo-count"}
+      (let [c (mx/mget (fmu :footer) :active-count)]
+        (str c " " (if (<= c 1) "item" "items") " left")))
+    (mxr/ul {:className "filters"}
+      (for [[href txt]  [["#/" "All"] ["#/active" "Active"] ["#/completed" "Completed"]]
+            :let [selected? (= href (router-hash me))
+                  prop (merge (when selected? {:className "selected"}) {:href href})]]
+        (mxr/li {} (mxr/a prop txt))))
+    (mxr/button {:className "clear-completed"
+                 :disabled (mx/mget me :disabled?)
+                 :onClick #(remove-completed! me)}
+      {:disabled? (mx/cF (= (mx/cF (count (todo-list me)))
+                            (mx/mget (fmu :footer) :active-count)))}
+      "Clear completed")))
 
 (defn TodoMVC []
   (mx/make
-   :todomvc
-   :rx-dom
-   (mx/cFonce
-    (mxr/div {:className "todoapp"}
-             (make-todo me)
-             (make-router me)
+    :todomvc
+    :rx-dom
+    (mx/cFonce
+      (mxr/div {:className "todoapp"}
+        (make-todo me)
+        (make-router me)
 
-             (Header)
-             (Main)
-             (footer)))))
+        (Header)
+        (Main)
+        (footer)))))
