@@ -56,10 +56,14 @@
     (.createElement (mxreact.mxreact/get-react)
                     (mxreact.mxreact/component-with-hooks
                      (apply react/createElement ~react-component
-                            (cljs.core/clj->js
-                             (cond-> ~jsx-props
-                               (tiltontec.matrix.api/mget? ~'me :use-ref?)
-                               (assoc :ref (mxreact.mxreact/ref-get ~'me))))
+                            (let [jsx-props# ~jsx-props]
+                              (when (and jsx-props# (not (map? jsx-props#)))
+                                (throw (ex-info "mk-react-element-with-kids: jsx-props must be a map"
+                                                {:jsx-props jsx-props#})))
+                              (cljs.core/clj->js
+                               (cond-> jsx-props#
+                                 (tiltontec.matrix.api/mget? ~'me :use-ref?)
+                                 (assoc :ref (mxreact.mxreact/ref-get ~'me)))))
                             (->> (tiltontec.matrix.api/mget? ~'me :kids)
                                  (clojure.core/map
                                   (fn [mapkid#]
