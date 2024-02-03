@@ -6,10 +6,8 @@
 (defmacro $
   [type & args]
   (let [type (if (keyword? type) (name type) type)]
-    (cond
-      (map? (first args))
+    (if (map? (first args))
       `(.createElement (mxreact.mxreact/get-react) ~type (cljs.core/clj->js ~(first args)) ~@(rest args))
-      :else
       `(.createElement (mxreact.mxreact/get-react) ~type nil ~@args))))
 
 (defmacro with-props [[& inherited] static-props]
@@ -25,52 +23,63 @@
      (let [[state# set-state#] (.useState (mxreact.mxreact/get-react) 0)]
        (.useEffect (mxreact.mxreact/get-react)
          (fn []
-           (some->> (when (tiltontec.matrix.api/mget? ~'me :use-ref?)
-                      (.useRef (mxreact.mxreact/get-react) :ref-undefined))
-             (mxreact.mxreact/ref-record ~'me))
-           (mxreact.mxreact/set-state-record ~'me set-state#)
-           (fn []
-             (tiltontec.cell.poly/md-quiesce ~'me)))
+           (tiltontec.matrix.api/mset! ~'me :set-state-fn set-state#)
+           (when-some [ref# (when (tiltontec.matrix.api/mget? ~'me :use-ref?)
+                              (.useRef (mxreact.mxreact/get-react) :ref-undefined))]
+             (tiltontec.matrix.api/mset! ~'me :ref ref#))
+           #(tiltontec.cell.poly/md-quiesce ~'me))
          (cljs.core/clj->js [~'me]))
        ~@body)))
 
 (defmacro mx$ [textFormulaBody]
   ;; we create Text with a string child, but one potentially reactive
-  (let [content-kwd (keyword (gensym "content"))]
+  (let [k (str (gensym "content"))]
     `(tiltontec.matrix.api/make
        :mxreact.mxreact/matrixrn.elt
-       :name (gensym "strng")
        :sid (swap! mxreact.mxreact/sid-latest inc)
-       ~content-kwd (tiltontec.matrix.api/cF ~textFormulaBody)
+       :set-state-fn (tiltontec.matrix.api/cI nil)
+       :ref (tiltontec.matrix.api/cI nil)
+       :content (tiltontec.matrix.api/cF ~textFormulaBody)
        :react-element (tiltontec.matrix.api/cF
                         (.createElement
                           (mxreact.mxreact/get-react)
                           (mxreact.mxreact/component-with-hooks
                             (.createElement
                               (mxreact.mxreact/get-react) "span"
-                              (cljs.core/clj->js {:key (rand-int 9999)}) {}
-                              (tiltontec.matrix.api/mget ~'me ~content-kwd))))))))
+                              (cljs.core/clj->js {:key ~k})
+                              (tiltontec.matrix.api/mget ~'me :content))))))))
 
 (defn mk-react-element-with-kids [react-component jsx-props]
   `(tiltontec.matrix.api/cF
      (.createElement (mxreact.mxreact/get-react)
        (mxreact.mxreact/component-with-hooks
          (apply react/createElement ~react-component
-           (let [jsx-props# ~jsx-props]
+           (let [jsx-props# ~jsx-props
+                 ref# (tiltontec.matrix.api/mget? ~'me :ref)]
              (when (and jsx-props# (not (map? jsx-props#)))
                (throw (ex-info "mk-react-element-with-kids: jsx-props must be a map"
                         {:jsx-props jsx-props#})))
              (cljs.core/clj->js
               (cond-> jsx-props#
-                (tiltontec.matrix.api/mget? ~'me :use-ref?)
-                (assoc :ref (mxreact.mxreact/ref-get ~'me)))))
+                ref# (assoc :ref ref#))))
+
            (->> (tiltontec.matrix.api/mget? ~'me :kids)
              (clojure.core/map
               (fn [mapkid#]
                 (when mapkid#
-                  (if (tiltontec.matrix.api/any-ref? mapkid#)
+                  (cond
+                    (tiltontec.matrix.api/any-ref? mapkid#)
                     (tiltontec.matrix.api/mget? mapkid# :react-element)
-                    (str mapkid#)))))
+
+                    (or
+                     ;; https://react.dev/reference/react/createElement
+                      (react/isValidElement mapkid#)
+                      (nil? mapkid#) (string? mapkid#)
+                      (number? mapkid#) (boolean? mapkid#))
+                    mapkid#
+
+                    ;; stringify other values
+                    :else (str mapkid#)))))
              (clojure.core/filter some?)))))))
 
 (defmacro mkc [react-component jsx-props & kids]
@@ -80,6 +89,8 @@
     `(tiltontec.matrix.api/make
        :mxreact.mxreact/matrixrn.elt
        :sid (swap! mxreact.mxreact/sid-latest inc)
+       :set-state-fn (tiltontec.matrix.api/cI nil)
+       :ref (tiltontec.matrix.api/cI nil)
        ~@(when (seq kids) `(:kids (tiltontec.matrix.api/cFkids ~@kids)))
        :react-element ~(mk-react-element-with-kids react-component jsx-props)
        ~@(apply concat (into [] mx-props)))))
@@ -89,15 +100,7 @@
      (mkc c# ~jsx-props ~@kids)))
 
 (defmacro mk [node-type jsx-props & kids]
-  (let [[mx-props kids] (if (map? (first kids))
-                          [(first kids) (rest kids)]
-                          [{} kids])]
-    `(tiltontec.matrix.api/make
-       :mxreact.mxreact/matrixrn.elt
-       :sid (swap! mxreact.mxreact/sid-latest inc)
-       ~@(when (seq kids) `(:kids (tiltontec.matrix.api/cFkids ~@kids)))
-       :react-element ~(mk-react-element-with-kids `(name ~node-type) jsx-props)
-       ~@(apply concat (into [] mx-props)))))
+  `(mkc ~(name node-type) ~jsx-props ~@kids))
 
 (declare
   input textarea option select a abbr address area article aside audio b base bdi

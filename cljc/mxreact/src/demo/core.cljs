@@ -21,7 +21,6 @@
   (.render app-react-root e))
 
 (defn matrix-build! [app]
-  (reset! mxr/ssdict {})
   (reset! mxr/matrix (app)))
 
 (defn render-matrix-app [app]
@@ -45,8 +44,9 @@
 #_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defn ^:dev/after-load start []
   (comment
-    (render-matrix-app todomvc/TodoMVC)
     (render-matrix-app x100-hello-world/app)
+
+    (render-matrix-app todomvc/TodoMVC)
 
     (render-matrix-app demo.list/MatrixApp)
     (render-root-element (mxr/$ demo.list/ReactApp))

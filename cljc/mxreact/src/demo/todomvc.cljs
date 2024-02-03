@@ -89,8 +89,7 @@
     (mxr/label {:className "hidden"} label)))
 
 (defn Header []
-  (mxr/header
-    {:className "header"}
+  (mxr/header {:className "header"}
     (mxr/h1 {} "todos")
     (Input {:on-submit
             (partial add-todo! me)
@@ -129,11 +128,12 @@
                               todos)))
      :some-visible? (mx/cF (pos? (count (mx/mget me :visible-todos))))}
     (when (mx/mget me :some-visible?)
-      (mxr/div {:className "toggle-all-container"}
-        (mxr/input {:className "toggle-all" :type "checkbox"
-                    :defaultChecked (every? :completed? (mx/mget (fmu :main) :visible-todos))
-                    :onChange #(toggle-all! me (.-checked (.-target %)))})
-        (mxr/label {:className "toggle-all-label"} "Toggle All Input")))
+      (mxr/span {}
+        (mxr/span {:className "toggle-all"})
+        (mxr/label {:onClick #(toggle-all! me (mx/mswap! me :checked? not))}
+          {:checked? (mx/cI (every? :completed? (mx/mget (fmu :main) :visible-todos)))}
+          "Toggle All Input")))
+
     (mxr/ul {:className "todo-list"}
       {:kid-values (mx/cF (mx/mget (fmu :main) :visible-todos))
        :kid-key #(mx/mget % :key)

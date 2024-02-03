@@ -4,30 +4,69 @@
    [react]
    [tiltontec.matrix.api :as mx]))
 
+(defn- list-prop [me k] (mx/mget (mx/fmu :list me) k))
+(defn- list-prop! [me k v] (mx/mset! (mx/fmu :list me) k v))
+(defn- list-prop-swap! [me k f & args] (apply mx/mswap! (mx/fmu :list me) k f args))
+
 (def box-style {:border "1px solid #000" :padding "10px" :marginRight "10px"})
+
+(defn- input-number? [evt]
+  (let [v (-> evt .-target .-value)]
+    (if (empty? v)
+      0
+      (try (parse-long v) (catch js/Error _ nil)))))
+
+(defn kids-type-selection []
+  (mxr/div {:style (assoc box-style :marginTop "8px" :marginBottom "8px")}
+    (mxr/div {}
+      (mxr/input {:type "checkbox"
+                  :checked (mx/mget me :checked?)
+                  :onChange (fn [e] (list-prop! me :raw? (not (-> e .-target .-checked))))}
+        {:checked? (mx/cF (not (list-prop me :raw?)))})
+      "use mx wrapped model as children?")
+    (mxr/div {}
+      (mxr/input {:type "checkbox"
+                  :checked (mx/mget me :checked?)
+                  :onChange (fn [e] (list-prop! me :raw? (-> e .-target .-checked)))}
+        {:checked? (mx/cF (list-prop me :raw?))})
+      "use raw react element as children?")))
+
+(defn list-inputs []
+  [(mxr/input {:style box-style
+               :value (mx/mget me :c)
+               :onChange #(some->> (input-number? %)
+                                   (list-prop! me :count))}
+     {:name :input :c (mx/cF (list-prop me :count))})
+   (mxr/button {:style box-style :onClick #(list-prop-swap! me :count inc)} "+")
+   (mxr/button {:style box-style :onClick #(list-prop-swap! me :count dec)} "-")])
+
+(defn list-items [raw?]
+  (if raw?
+    (mxr/div {:style {:display "flex" :flexWrap "wrap"}}
+      {:count (mx/cF (list-prop me :count))}
+      (time (map (fn [v]
+                   (mxr/$ :span {:style {:marginLeft "5px"} :key v}
+                          "item" v))
+                 (range (mx/mget me :count)))))
+    (mxr/div
+      {:style {:display "flex" :flexWrap "wrap"}}
+      {:name :container
+       :kid-values (mx/cF (doall (range (list-prop me :count))))
+       :kid-key #(mx/mget % :key)
+       :kid-factory (fn [_me kid-val]
+                      (mxr/span {:style {:marginLeft "5px"}}
+                        {:key kid-val}
+                        "item" kid-val))}
+      (time (mx/kid-values-kids me _cache)))))
 
 (defn MatrixApp []
   (mx/make ::list
     :rx-dom
     (mx/cFonce
-      (mxr/div {} {:name :list :count (mx/cI 10)}
-        (mxr/input {:style box-style
-                    :value (mx/mget me :c)
-                    :onChange #(when-some [n (try (parse-long (.-value (.-target %)))
-                                                  (catch js/Error _))]
-                                 (mx/mset! (mxr/fmu :list) :count n))}
-          {:c (mx/cF (mx/mget (mx/fmu :list) :count))})
-        (mxr/button {:style box-style
-                     :onClick #(mx/mswap! (mxr/fmu :list) :count inc)} "+")
-        (mxr/button {:style box-style
-                     :onClick #(mx/mswap! (mxr/fmu :list) :count dec)} "-")
-        (mxr/div
-          {:style {:display "flex" :flexWrap "wrap"}}
-          {:kid-values (mx/cF (doall (range (mx/mget (mx/fmu :list) :count))))
-           :kid-key #(mx/mget % :key)
-           :kid-factory (fn [_ kid-val]
-                          (mxr/span {:style {:marginLeft "5px"}} {:key kid-val} "item" kid-val))}
-          (mx/kid-values-kids me _cache))))))
+      (mxr/div {} {:name :list :count (mx/cI 0) :raw? (mx/cI false)}
+        (list-inputs)
+        (kids-type-selection)
+        (list-items (mx/mget me :raw?))))))
 
 (defn ReactApp
   []
@@ -37,9 +76,8 @@
      (react/createElement
       "input" #js {:style (clj->js box-style)
                    :value state
-                   :onChange #(when-some [n (try (parse-long (.-value (.-target %)))
-                                                 (catch js/Error _))]
-                                (set-state n))})
+                   :onChange #(->> (input-number? %)
+                                   (set-state))})
      (react/createElement
       "button" #js {:style (clj->js box-style)
                     :onClick #(set-state (inc state))} "+")
