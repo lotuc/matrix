@@ -16,6 +16,26 @@
              (pr k#))
            ~@(map second mx-props)))))
 
+(defn mk$* [type jsx-props mx-props react-element-formula-body]
+  `(let [~'me nil
+         ~'_cell nil
+         ~'_prop-name nil
+         ~'_cache nil]
+     [~'me ~'_cell ~'_prop-name ~'_cache]
+     (do ~type
+         (cljs.core/clj->js ~jsx-props)
+         ~react-element-formula-body
+         ~@(map second mx-props))))
+
+(defmacro mx$
+  ([type jsx-props mx-props react-element-formula-body]
+   (mk$* type jsx-props mx-props react-element-formula-body))
+  ([type jsx-props react-element-formula-body]
+   (mk$* type jsx-props {} react-element-formula-body))
+  ([react-element-formula-body]
+   ;; we create Text with a string child, but one potentially reactive
+   (mk$* :span {} {} react-element-formula-body)))
+
 (defmacro mk [sth mx-props & kids]
   (mk* sth mx-props kids))
 

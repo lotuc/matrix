@@ -3,7 +3,7 @@
    [mxreact.mxreact :as mxr]
    [react]
    [reagent.core :as r]
-   [tiltontec.matrix.api :refer-macros [cFonce] :as mx]))
+   [tiltontec.matrix.api :as mx]))
 
 (def click-count (r/atom 0))
 
@@ -63,13 +63,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Matrix APP as top level & interact with reagent components
 (defn MatrixApp []
-  (mx/make :mxreact/mxReactApp
-    :rx-dom
-    (cFonce
-     (mxr/div {}
-       (mxr/p {:style {:fontSize "1.2rem"}}
-         "Interop with Reagent")
-       (MxCounting)))))
+  (mxr/div {}
+    (mxr/p {:style {:fontSize "1.2rem"}}
+      "Interop with Reagent")
+    (MxCounting)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Reagent APP as top level & interact with matrix apps

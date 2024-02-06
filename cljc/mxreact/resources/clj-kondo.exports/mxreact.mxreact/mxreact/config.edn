@@ -1,5 +1,6 @@
 {:hooks {:macroexpand {mxreact.mxreact/mk hooks.mxreact.mxreact/mk
                        mxreact.mxreact/mkc hooks.mxreact.mxreact/mk
+                       mxreact.mxreact/mx$ hooks.mxreact.mxreact/mx$
                        mxreact.mxreact/mk-reagent hooks.mxreact.mxreact/mk
 
                        ;; generated configuration for tags

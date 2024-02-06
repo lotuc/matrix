@@ -5,12 +5,11 @@
    [demo.reagent-interop :as reagent-interop]
    [demo.todomvc :as todomvc]
    [demo.x100-hello-world :as x100-hello-world]
-   [mxreact.mxreact :as mxr]
+   [mxreact.mxreact :refer-macros [fm*] :as mxr]
    [react]
-   [tiltontec.matrix.api :as mx]
-   [tiltontec.model.core :as md]))
+   [tiltontec.matrix.api :as mx]))
 
-(set! *print-level* 3)
+(set! *print-level* 100)
 
 (defonce app-dom-node (js/document.getElementById "app"))
 (defonce app-react-root (createRoot app-dom-node))
@@ -20,23 +19,21 @@
   [e]
   (.render app-react-root e))
 
-(defn matrix-build! [app]
-  (reset! mxr/matrix (app)))
-
 (defn render-matrix-app [app]
-  (let [app-matrix (matrix-build! app)
-        root-mx (md/mget app-matrix :rx-dom)
-        root-element (md/mget root-mx :react-element)]
-    (render-root-element root-element)))
+  (mxr/mxreact-init!)
+  (->> (mxr/make-mxreact-app app)
+       (reset! mxr/matrix)
+       (mxr/mxreact-app-root-element)
+       (render-root-element)))
 
 (comment
   ;; find model with fm*
-  (def todo-list (mxr/fm* (:rx-dom @@md/matrix) :todo-list))
+  (def todo-list (fm* :todo-list (:rx-dom @@mxr/prev-matrix)))
   ;; read model's prop with mget
   (mx/mget todo-list :value)
   ;; set! model's prop with mset!
   (mx/mset! todo-list :value [])
-  (mx/mset! (mxr/fm* (:rx-dom @@mxr/matrix) :todo-list)
+  (mx/mset! (fm* :todo-list (:rx-dom @@mxr/matrix))
     :value (map (fn [i] {:id i :title (str "item" i)
                          :completed? false})
                 (range 10))))

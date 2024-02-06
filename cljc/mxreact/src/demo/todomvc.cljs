@@ -1,9 +1,9 @@
 (ns demo.todomvc
   (:require
    [clojure.string :as string]
-   [mxreact.mxreact :as mxr]
+   [mxreact.mxreact :refer-macros [fmu fmu-val] :as mxr]
    [react]
-   [tiltontec.matrix.api :refer-macros [fmu] :as mx]))
+   [tiltontec.matrix.api :as mx]))
 
 ;; basically one-to-one copy of
 ;;; https://github.com/tastejs/todomvc/tree/efafb5843a52fad8b465f642ee8d5d980ad1ac4d/examples/react
@@ -47,9 +47,12 @@
 (defn- remove-completed [todos]
   (into [] (filter (complement :completed?) todos)))
 
-(defn- make-todo [parent] (mx/with-par parent (mx/make ::todo :name :todo-list :value (mx/cI []))))
+(defn- make-todo [parent] (mx/with-par parent
+                            (mx/make ::todo
+                              :name :todo-list
+                              :value (mx/cI []))))
 (defn- swap-todo! [me f & args] (apply mx/mswap! (fmu :todo-list me) :value f args))
-(defn- todo-list [me] (mx/mget (fmu :todo-list me) :value))
+(defn- todo-list [me] (fmu-val :todo-list :value me))
 (defn- add-todo! [me title] (swap-todo! me add-todo title))
 (defn- update-todos! [me id title] (swap-todo! me update-todos id title))
 (defn- toggle-todo! [me id] (swap-todo! me toggle-todo id))
@@ -70,7 +73,8 @@
                     (js/window.navigation.addEventListener "navigate" cb)
                     cb))
       :hash (mx/cI js/window.location.hash))))
-(defn router-hash [me] (mx/mget (fmu :router me) :hash))
+
+(defn router-hash [me] (fmu-val :router :hash me))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -91,8 +95,7 @@
 (defn Header []
   (mxr/header {:className "header"}
     (mxr/h1 {} "todos")
-    (Input {:on-submit
-            (partial add-todo! me)
+    (Input {:on-submit (partial add-todo! me)
             :label "New Todo Input"
             :placeholder "What needs to be done?"})))
 
@@ -125,53 +128,55 @@
                                 "#/active" (complement :completed?)
                                 "#/completed" :completed?
                                 (constantly true))
-                              todos)))
-     :some-visible? (mx/cF (pos? (count (mx/mget me :visible-todos))))}
-    (when (mx/mget me :some-visible?)
-      (mxr/span {}
-        (mxr/span {:className "toggle-all"})
-        (mxr/label {:onClick #(toggle-all! me (mx/mswap! me :checked? not))}
-          {:checked? (mx/cI (every? :completed? (mx/mget (fmu :main) :visible-todos)))}
-          "Toggle All Input")))
+                              todos)))}
+
+    (mxr/span {:className (when (mx/mget me :hidden?) "hidden")}
+      {:hidden? (mx/cF (empty? (fmu-val :main :visible-todos)))}
+      (mxr/span {:className "toggle-all"})
+      (mxr/label {:onClick #(toggle-all! me (mx/mswap! me :checked? not))}
+        {:checked? (mx/cI (every? :completed? (fmu-val :main :visible-todos)))}
+        "Toggle All Input"))
 
     (mxr/ul {:className "todo-list"}
-      {:kid-values (mx/cF (mx/mget (fmu :main) :visible-todos))
-       :kid-key #(mx/mget % :key)
+      {:kid-values (mx/cF (fmu-val :main :visible-todos))
+       :kid-key #(mx/mget % :value)
        :kid-factory (fn [_ {:keys [id completed?] :as todo}]
-                      (mxr/li (if completed? {:className "completed"} {})
-                        {:key id}
+                      (mxr/li (when completed? {:className "completed"
+                                                :id (mx/mget me :sid)})
+                        {:value todo}
                         (Item todo)))}
       (mx/kid-values-kids me _cache))))
 
-(defn footer []
+(comment
+  (mxr/mx$ :span {:className "todo-count"}
+    (let [c (mx/mget (mx/fmu :footer me) :active-count)]
+      (str c " " (if (<= c 1) "item" "items") " left"))))
+
+(defn Footer []
   (mxr/footer
     {:className "footer"}
     {:name :footer
-     :active-count (mx/cF (count (filter :completed? (todo-list me))))}
-    (mxr/span {:className "todo-count"}
-      (let [c (mx/mget (fmu :footer) :active-count)]
+     :active-count (mx/cF (count (filter (complement :completed?) (todo-list me))))}
+    (mxr/mx$ :span {:className "todo-count"}
+      (let [c (mx/mget (mx/fmu :footer) :active-count)]
         (str c " " (if (<= c 1) "item" "items") " left")))
     (mxr/ul {:className "filters"}
-      (for [[href txt]  [["#/" "All"] ["#/active" "Active"] ["#/completed" "Completed"]]
-            :let [selected? (= href (router-hash me))
-                  prop (merge (when selected? {:className "selected"}) {:href href})]]
-        (mxr/li {} (mxr/a prop txt))))
+      (for [[href txt]  [["#/" "All"] ["#/active" "Active"] ["#/completed" "Completed"]]]
+        (mxr/li {} (mxr/a {:href href :className (when (mx/mget me :selected?) "selected")}
+                     {:selected? (mx/cF (= href (router-hash me)))}
+                     txt))))
     (mxr/button {:className "clear-completed"
                  :disabled (mx/mget me :disabled?)
                  :onClick #(remove-completed! me)}
       {:disabled? (mx/cF (= (mx/cF (count (todo-list me)))
-                            (mx/mget (fmu :footer) :active-count)))}
+                            (fmu-val :footer :active-count)))}
       "Clear completed")))
 
 (defn TodoMVC []
-  (mx/make
-    :todomvc
-    :rx-dom
-    (mx/cFonce
-      (mxr/div {:className "todoapp"}
-        (make-todo me)
-        (make-router me)
+  (mxr/div {:className "todoapp"}
+    (make-todo me)
+    (make-router me)
 
-        (Header)
-        (Main)
-        (footer)))))
+    (Header)
+    (Main)
+    (Footer)))

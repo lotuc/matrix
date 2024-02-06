@@ -51,7 +51,15 @@
     (mxr/div
       {:style {:display "flex" :flexWrap "wrap"}}
       {:name :container
-       :kid-values (mx/cF (doall (range (list-prop me :count))))
+       ;; react to input asynchronously
+       :kid-values-watcher (mx/cF+
+                             [:watch (mx/fn-watch
+                                       (js/setTimeout
+                                        #(mx/with-cc :watch
+                                           (mx/mset! me :kid-values (range new)))
+                                        0))]
+                             (mx/mget (mx/mpar) :count))
+       :kid-values (mx/cI [])
        :kid-key #(mx/mget % :key)
        :kid-factory (fn [_me kid-val]
                       (mxr/span {:style {:marginLeft "5px"}}
@@ -60,13 +68,10 @@
       (time (mx/kid-values-kids me _cache)))))
 
 (defn MatrixApp []
-  (mx/make ::list
-    :rx-dom
-    (mx/cFonce
-      (mxr/div {} {:name :list :count (mx/cI 0) :raw? (mx/cI false)}
-        (list-inputs)
-        (kids-type-selection)
-        (list-items (mx/mget me :raw?))))))
+  (mxr/div {} {:name :list :count (mx/cI 0) :raw? (mx/cI false)}
+    (list-inputs)
+    (kids-type-selection)
+    (list-items (mx/mget me :raw?))))
 
 (defn ReactApp
   []

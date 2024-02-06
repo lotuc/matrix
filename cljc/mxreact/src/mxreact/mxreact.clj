@@ -23,31 +23,42 @@
      (let [[state# set-state#] (.useState (mxreact.mxreact/get-react) 0)]
        (.useEffect (mxreact.mxreact/get-react)
          (fn []
-           (tiltontec.matrix.api/mset! ~'me :set-state-fn set-state#)
-           (when-some [ref# (when (tiltontec.matrix.api/mget? ~'me :use-ref?)
-                              (.useRef (mxreact.mxreact/get-react) :ref-undefined))]
-             (tiltontec.matrix.api/mset! ~'me :ref ref#))
-           #(tiltontec.cell.poly/md-quiesce ~'me))
+           (if (tiltontec.matrix.api/md-dead? ~'me)
+             (js/console.warn "component mounting while model is dead" ~'me)
+             (do (tiltontec.matrix.api/mset! ~'me :set-state-fn set-state#)
+                 (when-some [ref# (when (tiltontec.matrix.api/mget? ~'me :use-ref?)
+                                    (.useRef (mxreact.mxreact/get-react) :ref-undefined))]
+                   (tiltontec.matrix.api/mset! ~'me :ref ref#))))
+           (fn []))
          (cljs.core/clj->js [~'me]))
        ~@body)))
 
-(defmacro mx$ [textFormulaBody]
-  ;; we create Text with a string child, but one potentially reactive
-  (let [k (str (gensym "content"))]
-    `(tiltontec.matrix.api/make
-       :mxreact.mxreact/matrixrn.elt
-       :sid (swap! mxreact.mxreact/sid-latest inc)
-       :set-state-fn (tiltontec.matrix.api/cI nil)
-       :ref (tiltontec.matrix.api/cI nil)
-       :content (tiltontec.matrix.api/cF ~textFormulaBody)
-       :react-element (tiltontec.matrix.api/cF
-                        (.createElement
-                          (mxreact.mxreact/get-react)
-                          (mxreact.mxreact/component-with-hooks
-                            (.createElement
-                              (mxreact.mxreact/get-react) "span"
-                              (cljs.core/clj->js {:key ~k})
-                              (tiltontec.matrix.api/mget ~'me :content))))))))
+(defmacro mx$
+  ([type jsx-props mx-props react-element-formula-body]
+   (let [k (str (gensym "content"))
+         type (if (keyword? type) (name type) type)]
+     `(tiltontec.matrix.api/make :mxreact.mxreact/mxreact.elt
+        :sid (swap! mxreact.mxreact/sid-latest inc)
+        :set-state-fn (tiltontec.matrix.api/cI nil)
+        :ref (tiltontec.matrix.api/cI nil)
+        :content (tiltontec.matrix.api/cF ~react-element-formula-body)
+        :react-element (tiltontec.matrix.api/cF
+                         (.createElement
+                           (mxreact.mxreact/get-react)
+                           (mxreact.mxreact/component-with-hooks
+                             (.createElement (mxreact.mxreact/get-react) ~type
+                               (let [jsx-props# ~jsx-props]
+                                 (when (and jsx-props# (not (map? jsx-props#)))
+                                   (throw (ex-info "mx$: jsx-props must be a map"
+                                            {:jsx-props jsx-props#})))
+                                 (cljs.core/clj->js (merge {:key ~k} jsx-props#)))
+                               (tiltontec.matrix.api/mget ~'me :content)))))
+        ~@(apply concat (into [] mx-props)))))
+  ([type jsx-props react-element-formula-body]
+   `(mx$ ~type ~jsx-props {} ~react-element-formula-body))
+  ([react-element-formula-body]
+   ;; we create Text with a string child, but one potentially reactive
+   `(mx$ :span {} ~react-element-formula-body)))
 
 (defn mk-react-element-with-kids [react-component jsx-props]
   `(tiltontec.matrix.api/cF
@@ -86,8 +97,7 @@
   (let [[mx-props kids] (if (map? (first kids))
                           [(first kids) (rest kids)]
                           [{} kids])]
-    `(tiltontec.matrix.api/make
-       :mxreact.mxreact/matrixrn.elt
+    `(tiltontec.matrix.api/make :mxreact.mxreact/mxreact.elt
        :sid (swap! mxreact.mxreact/sid-latest inc)
        :set-state-fn (tiltontec.matrix.api/cI nil)
        :ref (tiltontec.matrix.api/cI nil)
@@ -141,25 +151,55 @@
 
 (gen-tags)
 
-(defmacro fmu [what]
-  `(tiltontec.matrix.api/fm-navig ~what ~'me
-     :me? false
-     :inside? false
-     :must? true
-     :up? true))
+(defmacro fmu
+  "Search the model tree from `me` with condition `what`, excluding
+  model `me` and its kids.
 
-(defmacro fmu-val [what prop]
-  `(tiltontec.matrix.api/mget (mxreact.mxreact/fmu ~what) ~prop))
+  `what` can be
+  - `keyword`: match model with model `:name`
+  - `fn?`: predicate that recevies model
+  - other ref value: match with `=`"
+  [what & [me]]
+  (let [code$ (str name) me (or me 'me)]
+    `(tiltontec.matrix.api/fm-navig ~what ~me
+       :what-code$ ~code$ :must? true
+       :me? false :inside? false :up? true)))
 
-(defmacro fmi [what]
-  `(tiltontec.matrix.api/fm-navig ~what ~'me
-     :me? true
-     :inside? true
-     :must? true
-     :up? false))
+(defmacro fmu-val
+  "find model with `fmu` and get its `prop` value."
+  [what prop & [me]]
+  `(tiltontec.matrix.api/mget (mxreact.mxreact/fmu ~what ~me) ~prop))
 
-(defmacro fmi-val [what prop]
-  `(tiltontec.matrix.api/mget (mxreact.mxreact/fmi ~what) ~prop))
+(defmacro fmi
+  "Search the model matching condition `what` from `me` and its kids."
+  [what & [me]]
+  (let [code$ (str what) me (or me 'me)]
+    `(tiltontec.matrix.api/fm-navig ~what ~me
+       :what-code$ ~code$ :must? true
+       :me? true :inside? true :up? false)))
 
-(defmacro myval [prop]
-  `(tiltontec.matrix.api/mget ~'me ~prop))
+(defmacro fmi-val
+  "Find model with `fmi` and get its `prop` value."
+  [what prop & [me]]
+  `(tiltontec.matrix.api/mget (mxreact.mxreact/fmi ~what ~me) ~prop))
+
+(defmacro fm*
+  "Find the model matching condition `what` from the whole model tree."
+  [what & [me]]
+  (let [code$ (str what) me (or me 'me)]
+    `(tiltontec.matrix.api/fm-navig ~what ~me
+       :what-code$ ~code$ :must? true
+       :me? true :inside? true :up? true)))
+
+(defmacro fm*-val
+  "Find model with `fm*` and get its `prop` value."
+  [what prop & [me]]
+  `(tiltontec.matrix.api/mget (mxreact.mxreact/fm* ~what ~me) ~prop))
+
+(defmacro fm*?
+  "`fm*` with `:must?` set to false."
+  [what & [me]]
+  (let [code$ (str what) me (or me 'me)]
+    `(tiltontec.matrix.api/fm-navig ~what ~me
+       :what-code$ ~code$ :must? false
+       :me? true :inside? true :up? true)))
