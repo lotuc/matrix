@@ -1,8 +1,7 @@
 (ns tiltontec.cell.poly
   {:clj-kondo/ignore [:unused-binding]}
   (:require
-   [tiltontec.util.base
-    :refer [mx-type]]))
+   [tiltontec.util.core :refer [mx-type]]))
 
 ;;; --- life cycle -------------------
 
@@ -19,27 +18,17 @@
   test is =, but cells can inject a different test, and when we get
   to models it will be possible for a prop to have associated
   with it a different test."
+  (fn [me prop] [(mx-type me) prop]))
 
-  (fn [me prop]
-    [(mx-type me) prop]))
-
-(defmethod unchanged-test :default [self propname]
-  =)
+(defmethod unchanged-test :default [self propname] =)
 
 ;;; --- watch --------------------------
 
-(defmulti watch-by-type (fn [prop-name me new-val old-val c]
-                          [(mx-type me)]))
+(defmulti watch-by-type (fn [prop-name me new-val old-val c] [(mx-type me)]))
 
 (defmethod watch-by-type :default [prop me new-val old-val c])
 
-(defmulti watch (fn [prop-name me new-val old-val c]
-                  [prop-name (mx-type me)]))
-
- ;; todo excessive flexibility? debugging?
-(def +watch-default-handler+ (atom nil))
+(defmulti watch (fn [prop-name me new-val old-val c] [prop-name (mx-type me)]))
 
 (defmethod watch :default [prop me new-val old-val c]
-  (if-let [w @+watch-default-handler+]
-    (w prop me new-val old-val c)
-    (watch-by-type prop me new-val old-val c)))
+  (watch-by-type prop me new-val old-val c))

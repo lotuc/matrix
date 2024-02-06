@@ -1,4 +1,6 @@
 (ns tiltontec.cell.synapse
+  #?(:cljs (:require-macros
+            [tiltontec.util.ref :refer [rmap-swap-prop!]]))
   (:require
    #?(:clj [tiltontec.cell.base
             :refer [*depender* c-model c-synapses dependency-record]]
@@ -8,9 +10,9 @@
       :cljs [tiltontec.cell.core :refer [make-c-formula]])
    #?(:clj [tiltontec.cell.diagnostic :refer [mxtrc]]
       :cljs [tiltontec.cell.diagnostic :refer-macros [mxtrc]])
+   #?(:clj [tiltontec.util.ref :refer [rmap-swap-prop!]])
    [tiltontec.cell.evaluate :refer [ensure-value-is-current]]
-   [tiltontec.cell.integrity]
-   [tiltontec.util.core :refer [rmap-setf]]))
+   [tiltontec.cell.integrity]))
 
 (defn existing-syn [synapse-id]
   (assert (keyword? synapse-id) "Synapse ID must be a keyword")
@@ -33,8 +35,7 @@
                                :synaptic? true
                                :rule (c-fn ~@body)))]
                         ;; (mxtrc :built-synapse!!!!!!!!!!!!!!!! :synapse-id ~synapse-id :new-syn @new-syn#)
-                        (rmap-setf [:synapses *depender*]
-                                   (conj (c-synapses *depender*) new-syn#))
+                        (rmap-swap-prop! *depender* :synapses conj  new-syn#)
                         (dependency-record new-syn#)        ;; needed?!!!!
                         ;; (mxtrc :made-syn!!!!!!!!!!!! :new-syn @new-syn#)
                         new-syn#))
@@ -52,9 +53,8 @@
         synapse (or existing-syn
                     (let [new-syn (cell-factory)]
                       (mxtrc :building-synapse :synapse-id ~synapse-id)
-                      (rmap-setf [:synapses *depender*]
-                                 (conj (c-synapses *depender*) new-syn))
-                      (dependency-record new-syn)           ;; needed?!!!!
+                      (rmap-swap-prop! *depender* :synapses conj new-syn)
+                      (dependency-record new-syn) ;; needed?!!!!
                       new-syn))
 
         value (tiltontec.cell.integrity/with-integrity ()

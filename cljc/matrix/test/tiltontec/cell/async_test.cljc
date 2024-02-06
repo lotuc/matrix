@@ -2,10 +2,9 @@
   (:require
    #?(:clj [clojure.test :refer :all]
       :cljs  [clojure.test :refer-macros [use-fixtures]])
-   #?(:clj
-      [clj-http.client :as client]))
+   #?(:clj [clj-http.client :as client]))
   #?(:clj (:import
-           (java.util.concurrent TimeUnit TimeoutException))))
+           [java.util.concurrent TimeUnit TimeoutException])))
 
 (defn prn-level-3 [f]
   (binding [*print-level* 3] (f)))

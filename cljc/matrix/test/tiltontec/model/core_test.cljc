@@ -1,33 +1,32 @@
 (ns tiltontec.model.core-test
   {:clj-kondo/ignore [:redundant-do]}
+  #?(:cljs (:require-macros
+            [tiltontec.util.ref :refer [dosync!]]))
   (:require
    #?(:clj  [clojure.test :refer :all]
       :cljs [cljs.test :refer-macros [deftest is use-fixtures]])
-   #?(:cljs [tiltontec.util.base
-             :refer [mx-type?]
-             :refer-macros [trx]]
-      :clj  [tiltontec.util.base
-             :refer [mx-type? trx]])
+   #?(:clj  [tiltontec.util.ref :refer [dosync!]])
+   #?(:cljs [tiltontec.util.trace :refer-macros [trx]]
+      :clj  [tiltontec.util.trace :refer [trx]])
    #?(:clj  [tiltontec.cell.base :refer [c-me c-prop c-ref?] :as cty]
-      :cljs [tiltontec.cell.base
-             :refer [c-me c-prop c-ref?] :as cty])
-   #?(:cljs [tiltontec.cell.integrity
-             :refer-macros [with-cc]]
+      :cljs [tiltontec.cell.base :refer [c-me c-prop c-ref?] :as cty])
+   #?(:cljs [tiltontec.cell.integrity :refer-macros [with-cc]]
       :clj  [tiltontec.cell.integrity :refer [with-cc]])
    #?(:cljs [tiltontec.cell.core
              :refer-macros [cF cF+ with-mx]
              :refer [c-reset! cI]]
       :clj  [tiltontec.cell.core :refer [c-reset! cF cF+ cI with-mx]])
-   #?(:clj  [tiltontec.model.core
-             :refer [fm! fm-navig md-name mdv! the-kids] :as md]
-      :cljs [tiltontec.model.core
-             :refer-macros [the-kids mdv!]
-             :refer [fm! fm-navig md-name]
-             :as md])
+   #?(:clj  [tiltontec.model.navigate
+             :refer [fm! fm-navig mdv!]]
+      :cljs [tiltontec.model.navigate
+             :refer-macros [mdv!]
+             :refer [fm! fm-navig]])
    [clojure.string :as str]
    [tiltontec.cell.poly :refer [md-quiesce]]
    [tiltontec.matrix.api :refer [fn-watch mget mset! mswap!]]
-   [tiltontec.model.base :refer [md-cell md-cz]]))
+   [tiltontec.model.core :refer [make md-cell md-cz md-name]]
+   [tiltontec.model.family :refer [the-kids]]
+   [tiltontec.util.core :refer [mx-type?]]))
 
 (defn prn-level-3 [f]
   (binding [*print-level* 3] (f)))
@@ -36,12 +35,12 @@
 
 (deftest fm-0
   (with-mx
-    (let [u (md/make
+    (let [u (make
              :kon (cI false :prop :kon)
              :kids (cF                                     ;;(trx :kids-run! *depender*)
                     (when (mget me :kon)
                       (vector
-                       (md/make
+                       (make
                         :parent me
                         :name :konzo
                         :kzo (cI 3))))))]
@@ -50,25 +49,25 @@
             kon (md-cell u :kon)]
         (c-reset! kon true)
         (is (= 1 (count (:kids @u))))
-        (is (md/fm-navig :konzo u :inside? true))))))
+        (is (fm-navig :konzo u :inside? true))))))
 
 (deftest fm-2
   (with-mx
-    (let [u (md/make
+    (let [u (make
              :name :uni
              :kids (cF (vector
-                        (md/make
+                        (make
                          :parent me
                          :name :aa)
-                        (md/make
+                        (make
                          :parent me
                          :name :bb
                          :kids (cF (vector
-                                    (md/make
+                                    (make
                                      :parent me
                                      :name :bba)
 
-                                    (md/make
+                                    (make
                                      :parent me
                                      :name :bbb)))))))]
       ;; (is (fm-navig :bba u :inside? true :must? true))
@@ -79,14 +78,14 @@
       #_{:clj-kondo/ignore [:redundant-let]}
       (let [bba (fm-navig :bba u :inside? true :must? true)]
         (is bba)
-        (is (md/fm-navig :uni bba :inside? true :up? true))
+        (is (fm-navig :uni bba :inside? true :up? true))
         (is (fm-navig :aa bba :inside? false :up? true))
         (is (fm-navig :bb bba :inside? true :up? true))
         (is (fm-navig :bbb bba :inside? false :up? true))))))
 
 (deftest bmi
   (with-mx
-    (let [md (md/make
+    (let [md (make
               :height 2 ;; meters
               :weight (cI 80) ;; kg
               :bmi (cF (/ (mget me :weight)
@@ -107,24 +106,24 @@
 
 (deftest fm-3
   (with-mx
-    (let [u (md/make
+    (let [u (make
              :u63 (cF (+ (mdv! :aa :aa42)
                          (mdv! :bb :bb21)))
              :kon (cI false)
              :kids (cF (doall
                         (remove nil?
                                 (vector
-                                 (md/make
+                                 (make
                                   :parent me
                                   :name :aa
                                   :aa42 (cF (* 2 (mdv! :bb :bb21)))
                                   :aa3 (cI 3))
                                  (when (mget me :kon)
-                                   (md/make
+                                   (make
                                     :parent me
                                     :name :konzo
                                     :kzo (cI 3)))
-                                 (md/make
+                                 (make
                                   :parent me
                                   :name :bb
                                   :bb21 (cF (* 7 (mdv! :aa :aa3)))))))))]
@@ -140,20 +139,20 @@
 
 (deftest fm-3x                                              ;; using the-kids macro
   (with-mx
-    (let [u (md/make
+    (let [u (make
              :u63 (cF (+ (mdv! :aa :aa42)
                          (mdv! :bb :bb21)))
              :kon (cI false)
              :kids (cF (the-kids
-                        (md/make
+                        (make
                          :name :aa
                          :aa42 (cF (* 2 (mdv! :bb :bb21)))
                          :aa3 (cI 3))
                         (when (mget me :kon)
-                          (md/make
+                          (make
                            :name :konzo
                            :kzo (cI 3)))
-                        (md/make
+                        (make
                          :name :bb
                          :bb21 (cF (* 7 (mdv! :aa :aa3)))))))]
       (is (= 63 (mget u :u63)))
@@ -168,18 +167,18 @@
 
 (deftest fm-picker
   (with-mx
-    (let [u (md/make
+    (let [u (make
              :kids (cF (the-kids
-                        (md/make :name :picker
-                                 :value (cI 42)
-                                 :kids (cF (the-kids
-                                            (md/make
-                                             :name :aax)
-                                            (md/make
-                                             :name :bbx))))
-                        (md/make :name :dd
-                                 :kzo (cF (let [p (fm-navig :picker me)]
-                                            (mget p :value)))))))]
+                        (make :name :picker
+                              :value (cI 42)
+                              :kids (cF (the-kids
+                                         (make
+                                          :name :aax)
+                                         (make
+                                          :name :bbx))))
+                        (make :name :dd
+                              :kzo (cF (let [p (fm-navig :picker me)]
+                                         (mget p :value)))))))]
       (is (= 42 (mdv! :picker :value u)))
       (is (= 42 (mdv! :dd :kzo u))))))
 
@@ -187,7 +186,7 @@
 
 (deftest mm-typed
   (with-mx
-    (let [me (md/make
+    (let [me (make
               :mx-type ::typetest
               :x2 (cI 2)
               :age (cF (* (mget me :x2)
@@ -198,7 +197,7 @@
 (deftest mm-md-quiescer
   (with-mx
     (let [mme (atom nil)
-          me (md/make
+          me (make
               :mx-type ::typetest
               :name :meself
               :x2 (cI 2)
@@ -209,13 +208,13 @@
       (is (= 42 (mget me :age)))
       (is (mx-type? me ::typetest))
       (is (nil? @mme))
-      (#?(:clj dosync :cljs do)
+      (dosync!
        (md-quiesce me))
       (is (not (nil? @mme))))))
 
 (deftest mm-opti-1
   (with-mx
-    (let [me (md/make
+    (let [me (make
               :x2 2
               :age (cF (* 21 (mget me :x2))))]
       (is (= 2 (mget me :x2)))
@@ -226,7 +225,7 @@
   (with-mx
     (let [bct (atom 0)
           res (do                                           ;; sync
-                (md/make
+                (make
                  :name "Bob"
                  :action (cI nil
                              :ephemeral? true)
@@ -281,17 +280,17 @@
 
 (deftest hello-model
   (with-mx
-    (let [uni (md/make
-               ::md/family
+    (let [uni (make
+               :tiltontec.model/family
                :kids (cF (the-kids
-                          (md/make
+                          (make
                            :name :visitor
                            :moniker "World"
                            :action (cI nil
                                        :ephemeral? true
                                        :watch (fn [_prop _me new _old _c]
                                                 (when new (trx visitor-did new)))))
-                          (md/make
+                          (make
                            :name :resident
                            :action (cI nil :ephemeral? true)
                            :location (cF+ [:watch (fn-watch (when new (trx :honey-im new)))]
@@ -306,7 +305,7 @@
                                             (when-let [act (mdv! :visitor :action)]
                                               (case act
                                                 :knock-knock "hello, world")))))
-                          (md/make
+                          (make
                            :name :alarm
                            :on-off (cF+ [:watch (fn-watch
                                                  (trx :telling-alarm-api new))]
@@ -336,7 +335,7 @@
 
 (deftest clock-with-cc
   (with-mx
-    (let [clk (md/make
+    (let [clk (make
                :name :clock
                :ticking? (cI false)
                :tick (cI 0 :watch (fn [_ me new _ _]

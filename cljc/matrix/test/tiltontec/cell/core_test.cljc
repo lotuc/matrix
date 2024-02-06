@@ -1,12 +1,15 @@
 (ns tiltontec.cell.core-test
+  #?(:cljs (:require-macros
+            [tiltontec.util.ref :refer [dosync!]]))
   (:require
    #?(:clj  [clojure.test :refer :all]
       :cljs [cljs.test :refer-macros [deftest is]])
-   #?(:cljs [tiltontec.util.base
-             :refer [mx-type mx-type?]
-             :refer-macros [trx prog1]]
-      :clj  [tiltontec.util.base
-             :refer [mx-type mx-type? prog1 trx]])
+   #?(:clj  [tiltontec.util.ref :refer [dosync!]])
+   #?(:cljs [tiltontec.util.trace :refer-macros [trx]]
+      :clj  [tiltontec.util.trace :refer [trx]])
+   #?(:clj [tiltontec.util.core :refer [mx-type mx-type? prog1]]
+      :cljs [tiltontec.util.core :refer [mx-type mx-type?]
+             :refer-macros [prog1]])
    #?(:clj  [tiltontec.cell.base
              :refer [c-callers c-input? c-model c-optimize c-prop c-prop-name
                      c-ref? c-rule c-useds c-valid? c-value c-value-state
@@ -185,7 +188,7 @@
       (is (c-input? c))
       (is (nil? (c-model c)))
       (is (= :cool (c-prop c) (c-prop-name c)))
-      (#?(:clj dosync :cljs do)
+      (dosync!
        (tiltontec.cell.evaluate/c-quiesce c))
       (is (not (nil? @cc)))
 

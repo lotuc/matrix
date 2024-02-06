@@ -1,13 +1,14 @@
 (ns tiltontec.cell.diagnostic
   #?(:cljs
-     (:require-macros [tiltontec.cell.diagnostic :refer [mxtrc mxtrc-cell]]))
+     (:require-macros [tiltontec.cell.diagnostic :refer [mxtrc mxtrc-cell]]
+                      [tiltontec.util.ref :refer [any-ref?]]))
   (:require
+   #?(:clj [tiltontec.util.ref :refer [any-ref?]])
    [clojure.set :as set]
    [tiltontec.cell.base
     :refer [c-async? c-md-name c-prop-name c-ref? c-value c-value-state
             md-ref?]]
-   [tiltontec.util.base :refer [mx-type]]
-   [tiltontec.util.core :refer [any-ref?]]))
+   [tiltontec.util.core :refer [mx-type set-ify]]))
 
 ;;; a collection of tags to be traced (checkout `mxtrc` & `mxtrc-cell`)
 (def ^:dynamic *mx-trace* nil)
@@ -51,17 +52,11 @@
            (mx-type c)
            (c-async? c)]))
 
-(defn ensure-set [x]
-  (cond
-    (set? x) x
-    (coll? x) (set x)
-    :else #{x}))
-
 (defn match-loose [seek in]
   (when-not (nil? in)
     (or (= in :all)
         (and (coll? in) (some #{:all} in))
-        (seq (set/intersection (ensure-set seek) (ensure-set in))))))
+        (seq (set/intersection (set-ify seek) (set-ify in))))))
 
 (defn build-trace-map [& bits]
   (assert (even? (count bits)))

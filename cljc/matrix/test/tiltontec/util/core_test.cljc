@@ -1,17 +1,24 @@
 (ns tiltontec.util.core-test
+  #?(:cljs (:require-macros
+            [tiltontec.util.ref
+             :refer [any-ref? dosync! make-ref make-ref rmap-set-prop!
+                     rmap-swap-prop! def-rmap-props]]))
   (:require
-   #?(:cljs [cljs.test
-             :refer-macros [deftest is are use-fixtures]]
+   #?(:cljs [cljs.test :refer-macros [deftest is are use-fixtures]]
       :clj [clojure.test :refer :all])
-   #?(:cljs [tiltontec.util.base :as utm
-             :refer-macros [trx def-rmap-props wtrx]]
-      :clj [tiltontec.util.base :as utm
-            :refer [*trxdepth* def-rmap-props trx wtrx]])
-   [clojure.set :as cset]
-   [tiltontec.util.core
-    :refer [any-ref? fifo-add fifo-data fifo-empty? fifo-peek fifo-pop ia-ref
-            make-fifo-queue rmap-setf set-ify throw-ex]
-    :as ut]))
+   #?(:cljs [tiltontec.util.trace :refer-macros [trx wtrx]]
+      :clj [tiltontec.util.trace :refer [*trxdepth* trx wtrx]])
+   #?(:clj [tiltontec.util.ref
+            :refer [any-ref? def-rmap-props dosync! make-ref make-ref
+                    rmap-set-prop! rmap-swap-prop!]])
+   #?(:clj [tiltontec.util.core
+            :refer [fifo-add fifo-data fifo-empty? fifo-peek fifo-pop
+                    make-fifo-queue prog1 set-ify throw-ex]]
+      :cljs [tiltontec.util.core
+             :refer [fifo-add fifo-data fifo-empty? fifo-peek fifo-pop
+                     make-fifo-queue set-ify throw-ex]
+             :refer-macros [prog1]])
+   [clojure.set :as cset]))
 
 (defn prn-level-3 [f]
   (binding [*print-level* 3] (f)))
@@ -19,18 +26,7 @@
 (use-fixtures :once prn-level-3)
 
 (deftest fake-cl
-  (is (= 42 (utm/prog1 42 43 44)))
-  (is (= 42 (utm/b-when x (+ 21 21)
-                        42 x)))
-  (is (nil? (utm/b-when _x false
-                        43 42)))
-  (are [lst] (= 42 (ut/cl-find 42 lst))
-    '(41 42 43)
-    '(42 43 44)
-    '(40 41 42))
-
-  (is (= 42 (utm/unless (= 2 3) 3 42)))
-  (is (nil? (utm/unless (= 2 2) 3 42))))
+  (is (= 42 (prog1 42 43 44))))
 
 (deftest setify
   (is (= #{1 2 3} (set-ify [1 1 2 2 3 3])))
@@ -46,17 +42,17 @@
 (def-rmap-props jj- boom)
 
 (deftest test-rmap
-  (let [x (ia-ref {:value 0 :boom 42})]
+  (let [x (make-ref {:value 0 :boom 42})]
     (is (= 42 (jj-boom x)))
     (is (= 0 (:value @x)))
-    (#?(:clj dosync :cljs do) (rmap-setf [:value x] 42))
+    (dosync! (rmap-set-prop! x :value 42))
     (trx nil :xxx x @x (:value @x))
     (is (= 42 (:value @x)))
-    (is (let [j (#?(:clj dosync :cljs do) (rmap-setf [:value x] 43))]
-                                        ;(trx nil :xxx x @x (:value @x))
-                                        ;(trx nil :j j (type j))
+    (is (let [j (dosync! (rmap-set-prop! x :value 43))]
           (= 43 j)))
-    (is (= 44 (#?(:clj dosync :cljs do) (rmap-setf [:value x] 44))))))
+    (is (= 44 (dosync! (rmap-set-prop! x :value 44))))
+    (is (= 45 (dosync! (rmap-swap-prop! x :value inc))))
+    (is (= 50 (dosync! (rmap-swap-prop! x :value + 5))))))
 
 (defn wtrx-test [n]
   (wtrx
@@ -94,13 +90,13 @@
     (is (nil? (fifo-peek q)))
     (is (nil? (fifo-pop q)))
     (is (empty? (fifo-data q)))
-    (#?(:clj dosync :cljs do)
+    (dosync!
      (fifo-add q 1)
      (is (not (fifo-empty? q)))
      (is (= 1 (fifo-peek q)))
      (is (= 1 (fifo-pop q)))
      (is (fifo-empty? q)))
-    (#?(:clj dosync :cljs do)
+    (dosync!
      (fifo-add q 1)
      (fifo-add q 2)
      (is (not (fifo-empty? q)))
@@ -115,13 +111,13 @@
     (is (nil? (fifo-peek q)))
     (is (nil? (fifo-pop q)))
     (is (empty? (fifo-data q)))
-    (#?(:clj dosync :cljs do)
+    (dosync!
      (fifo-add q 1)
      (is (not (fifo-empty? q)))
      (is (= 1 (fifo-peek q)))
      (is (= 1 (fifo-pop q)))
      (is (fifo-empty? q)))
-    (#?(:clj dosync :cljs do)
+    (dosync!
      (fifo-add q 1)
      (fifo-add q 2)
      (is (not (fifo-empty? q)))

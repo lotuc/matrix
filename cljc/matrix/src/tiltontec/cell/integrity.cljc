@@ -1,15 +1,21 @@
 (ns tiltontec.cell.integrity
-  {:clj-kondo/ignore [:redundant-do]}
-  #?(:cljs (:require-macros [tiltontec.cell.integrity
-                             :refer [with-integrity with-cc without-integrity with-async-change]]))
+  #?(:cljs (:require-macros
+            [tiltontec.cell.integrity
+             :refer [with-integrity with-cc without-integrity with-async-change]]
+            [tiltontec.util.ref :refer [ref-swap!]]))
   (:require
-   #?(:cljs [tiltontec.util.base :refer-macros [trx prog1]]
-      :clj  [tiltontec.util.base :refer [prog1 trx]])
+   #?(:cljs [tiltontec.util.trace :refer-macros [trx]]
+      :clj  [tiltontec.util.trace :refer [trx]])
+   #?(:clj [tiltontec.util.ref :refer [ref-swap!]])
+   #?(:clj [tiltontec.util.core
+            :refer [fifo-add fifo-peek fifo-pop prog1 throw-ex]]
+      :cljs [tiltontec.util.core
+             :refer [fifo-add fifo-peek fifo-pop throw-ex]
+             :refer-macros [prog1]])
    [tiltontec.cell.base
     :refer [*defer-changes* *dp-log* *one-pulse?* *pulse*
             *unfinished-business* *within-integrity* +client-q-handler+
-            c-optimized-away? c-pulse un-stopped]]
-   [tiltontec.util.core :refer [fifo-add fifo-peek fifo-pop throw-ex]]))
+            c-optimized-away? c-pulse un-stopped]]))
 
 ;; --- the pulse ------------------------------
 
@@ -19,7 +25,7 @@
    (when-not *one-pulse?*
      (when *dp-log*
        (trx "dp-next> " (inc @*pulse*) pulse-info))
-     (#?(:clj alter :cljs swap!) *pulse* inc))))            ;; hhack try as commute
+     (ref-swap! *pulse* inc))))            ;; hhack try as commute
 
 (defn c-current? [c]
   (when-some [p (c-pulse c)]
@@ -30,7 +36,7 @@
     (let [cell-pulse (c-pulse c)
           pulse @*pulse*]
       (assert (or (nil? cell-pulse) (>= @*pulse* cell-pulse)))
-      (#?(:clj alter :cljs swap!) c assoc :pulse pulse))))
+      (ref-swap! c assoc :pulse pulse))))
 
 ;; --- ufb utils ----------------------------
 
@@ -45,13 +51,16 @@
 (defn ufb-add [opcode continuation]
   (fifo-add (ufb-queue opcode) continuation))
 
+(defn ufb-peek [opcode]
+  (fifo-peek (ufb-queue opcode)))
+
+(defn ufb-pop [opcode]
+  (fifo-pop (ufb-queue opcode)))
+
 (defn ufb-assert-q-empty [opcode]
   (if-let [uqp (fifo-peek (ufb-queue opcode))]
     (throw-ex "ufb queue not empty" {:opcode opcode :uqp uqp})
     true))
-
-;; --- the ufb and integrity beef ----------------------
-;;    proper ordering of state propagation
 
 (defn ufb-do
   ([opcode]
@@ -63,6 +72,9 @@
      (task opcode defer-info)
      (recur q opcode))))
 
+;; --- the ufb and integrity beef ----------------------
+;;    proper ordering of state propagation
+
 (defn finish-business []
   (un-stopped
    (loop [tag :tell-dependents]
@@ -71,7 +83,7 @@
        (do (ufb-do :tell-dependents)
            (ufb-do :awaken)
            (recur
-            (if (fifo-peek (ufb-queue :tell-dependents))
+            (if (ufb-peek :tell-dependents)
               :tell-dependents
               :handle-clients)))
 
@@ -81,7 +93,7 @@
            (cqh clientq)
            (ufb-do clientq :client))
          (recur
-          (if (fifo-peek (ufb-queue :client))
+          (if (ufb-peek :client)
             :handle-clients
             :ephemeral-reset)))
 
@@ -90,7 +102,7 @@
            (recur :deferred-state-change))
 
        :deferred-state-change
-       (when-let [[defer-info task-fn] (fifo-pop (ufb-queue :change))]
+       (when-let [[defer-info task-fn] (ufb-pop :change)]
          (data-pulse-next :defferred-state-chg)
          (task-fn :change defer-info)
          (recur :tell-dependents))))))

@@ -1,48 +1,55 @@
 (ns tiltontec.cell.evaluate
-  {:clj-kondo/ignore [:redundant-do]}
+  #?(:cljs (:require-macros
+            [tiltontec.util.ref
+             :refer [any-ref? dosync! meta-map-set-prop! meta-map-swap-prop!
+                     ref-set! ref-swap! rmap-set-prop!]]))
   (:require
    #?(:cljs [tiltontec.cell.integrity
              :refer-macros [with-integrity]
              :refer [c-current? c-pulse-update]]
       :clj  [tiltontec.cell.integrity :refer [c-current? c-pulse-update with-integrity]])
-   #?(:cljs [tiltontec.util.base :refer [mx-type] :refer-macros [trx prog1]]
-      :clj  [tiltontec.util.base :refer [mx-type prog1 trx]])
+   #?(:cljs [tiltontec.util.trace :refer-macros [trx]]
+      :clj  [tiltontec.util.trace :refer [trx]])
+   #?(:clj [tiltontec.util.ref
+            :refer [any-ref? dosync! meta-map-set-prop! meta-map-swap-prop!
+                    ref-set! ref-swap! rmap-set-prop!]])
+   #?(:clj [tiltontec.util.core :refer [mx-type prog1 set-ify throw-ex]]
+      :cljs [tiltontec.util.core
+             :refer [mx-type set-ify throw-ex]
+             :refer-macros [prog1]])
    [clojure.set :refer [difference]]
    [clojure.string :as str]
    [tiltontec.cell.base
     :refer [*c-prop-depth* *call-stack* *causation* *custom-propagator*
             *defer-changes* *depender* *one-pulse?* *pulse* *quiesce*
             c-callers c-code$ c-ephemeral? c-formula? c-input? c-lazy
-            c-md-name c-me c-model c-optimize c-optimized-away? c-prop
-            c-prop-name c-pulse c-pulse-last-changed c-pulse-unwatched?
-            c-pulse-watched c-ref? c-rule c-state c-synaptic? c-unbound?
-            c-useds c-valid? c-value c-value-state c-warn dependency-drop
-            dependency-record md-prop-owning? mdead? unlink-from-callers
-            unlink-from-used without-c-dependency]
+            c-md-name c-me c-model c-optimize c-optimized-away-value
+            c-optimized-away? c-prop c-prop-name c-pulse c-pulse-last-changed
+            c-pulse-unwatched? c-pulse-watched c-ref? c-rule c-state
+            c-synaptic? c-unbound? c-useds c-valid? c-value c-value-state
+            c-warn dependency-drop dependency-record md-prop-owning? mdead?
+            unlink-from-callers unlink-from-used without-c-dependency]
     :as cty]
    [tiltontec.cell.diagnostic :refer [c-debug? cinfo minfo mxtrc mxtrc-cell]]
    [tiltontec.cell.poly :refer [c-awaken md-quiesce md-quiesce-self
                                 unchanged-test]]
-   [tiltontec.cell.watch :refer [c-watch]]
-   [tiltontec.util.core
-    :refer [any-ref? rmap-meta-setf rmap-setf set-ify throw-ex]]))
+   [tiltontec.cell.watch :refer [c-watch]]))
 
 (defn ephemeral-reset [rc]
-  ;; (trx :eph-reset?????? (:prop @rc)(:ephemeral? @rc))
-  (when (c-ephemeral? rc) ;; allow call on any cell, catch here
+  ;; allow call on any cell, catch here
+  (when (c-ephemeral? rc)
     ;;
     ;; as of Cells3 we defer resetting ephemerals because everything
     ;; else gets deferred and we cannot /really/ reset it until
     ;; within finish_business we are sure all callers have been recalculated
     ;; and all watchs completed (which happens with recalc).
     ;;
-    ;; (trx :ephh-reset!!! (:prop @rc))
     (with-integrity [:ephemeral-reset rc]
-      (when-let [me (:me @rc)]
+      (when-let [me (c-model rc)]
         ;; presumption next is that model cells live in
         ;; their own internal prop of model FNYI
-        (#?(:clj alter :cljs swap!) me assoc (:prop @rc) nil))
-      (#?(:clj alter :cljs swap!) rc assoc :value nil))))
+        (ref-swap! me assoc (c-prop rc) nil))
+      (ref-swap! rc assoc :value nil))))
 
 (declare calculate-and-set cget-value-as-is)
 
@@ -123,17 +130,11 @@
   Ensures value is current, records any dependent, and
   notices if a standalone cell has never been watched."
   [c]
-  (cond
-    (not (c-ref? c)) c
-
-    (c-optimized-away? c)
-    ;; opti-way goes in stages. "as is" digs past that to get value
-    ;; without ensuring currency.
-    (cget-value-as-is c)
-
-    :else
-    (do
-      (mxtrc-cell c :cget-sees-integ :within-interigity cty/*within-integrity*)
+  (if (not (c-ref? c))
+    c
+    ;; opti-way goes in stages.
+    (if-some [[v] (c-optimized-away-value c)]
+      v
       (prog1
        (with-integrity []
          (assert (c-ref? c) "c lost c-refness")
@@ -154,7 +155,7 @@
             (when (and (nil? (c-model c))
                        (= (c-state c) :nascent)
                        (c-pulse-unwatched? c))
-              (rmap-setf [::cty/state c] :awake)
+              (rmap-set-prop! c ::cty/state :awake)
               (c-watch c prior-value :cget)
               (ephemeral-reset c)))))
        (when *depender*
@@ -177,7 +178,6 @@
       ;; can be re-entered unnoticed since that "clears" *call-stack*. If re-entered, a subsequent
       ;; re-exit will be of an optimized away cell, which will have been value-assumed
       ;; as part of the opti-away processing.
-      ;; (trx :calc-n-set->assume raw-value)
       (mxtrc-cell c :not-optimized!!!!!!!!!!!)
       (c-value-assume c raw-value propagation-code))))
 
@@ -239,15 +239,16 @@
 (defmethod c-awaken ::cty/cell [c]
   (assert (c-input? c))
   ;; nothing to calculate, but every cellular prop should be output on birth
-  (#?(:clj dosync :cljs do)
-   (when (c-pulse-unwatched? c) ;; safeguard against double-call
+  (dosync!
+   (when (c-pulse-unwatched? c)
+     ;; safeguard against double-call
      (when-let [me (c-me c)]
-       (rmap-setf [(c-prop c) me] (c-value c)))
+       (rmap-set-prop! me (c-prop c) (c-value c)))
      (c-watch c :cell-awaken)
      (ephemeral-reset c))))
 
 (defmethod c-awaken ::cty/c-formula [c]
-  (#?(:clj dosync :cljs do)
+  (dosync!
    ;; hhack -- bundle this up into reusable with evic
    (binding [*depender* nil]
      (when-not (c-current? c)
@@ -262,17 +263,15 @@
 (defn md-prop-value-store [me prop value]
   (assert me)
   (assert (any-ref? me))
-  (rmap-setf [prop me] value))
+  (rmap-set-prop! me prop value))
 
 (defn c-value-assume
-  "The Cell assumes a new value at awakening, on c-reset!, or
-   after formula recalculation.
+  "The Cell assumes a new value at awakening, on c-reset!, or after
+  formula recalculation.
 
-  We record the new value, set the Cell state to :awake, make
-  its pulse current, check to see if a formula cell can be
-  optimized away, and then propagate to any dependent formula
-  cells."
-
+  We record the new value, set the Cell state to :awake, make its
+  pulse current, check to see if a formula cell can be optimized away,
+  and then propagate to any dependent formula cells."
   [c new-value propagation-code]
 
   (assert (c-ref? c))
@@ -282,31 +281,33 @@
    (let [dbg? (c-debug? c)
          prior-value (c-value c)
          prior-state (c-value-state c)
-           ;; copy callers before possible optimize-away
+         ;; copy callers before possible optimize-away
          callers (c-callers c)
          value-changed? (c-value-changed? c new-value prior-value)
          force-propagate? (true? propagation-code)
          force-no-propagate? (or (false? propagation-code)
-                                   ;; a legacy value, I guess
+                                 ;; a legacy value, I guess
                                  (= propagation-code :no-propagate))]
-     ;; --- cell maintenance ---
-     ;; even if no news at least honor the reset!
-     ;;
-     (rmap-setf [:value c] new-value)
-     (rmap-setf [::cty/state c] :awake)
-     (mxtrc-cell c :cva-new-value-installed :new-value new-value)
 
      ;;
      ;; --- model maintenance ---
-     (when (and (c-model c) ; redundant with next check, but logic is impeccable
-                (not (c-synaptic? c))) ; synapses just manage cell state, no model property
-       (md-prop-value-store (c-model c) (c-prop c) new-value))
+     (when-some [m (c-model c)]
+       ;; redundant with next check, but logic is impeccable; synapses just
+       ;; manage cell state, no model property
+       (assert (not (c-synaptic? c)))
+       (rmap-set-prop! m (c-prop c) new-value))
 
+     ;; --- cell maintenance ---
+     ;; even if no news at least honor the reset!
+     ;;
+     (rmap-set-prop! c :value new-value)
+     (rmap-set-prop! c ::cty/state :awake)
+     (mxtrc-cell c :cva-new-value-installed :new-value new-value)
      (c-pulse-update c :propv-assume)
      (when (and (not (c-optimized-away? c))
                 (not force-no-propagate?)
                 value-changed?)
-       (rmap-setf [:pulse-last-changed c] @*pulse*))
+       (rmap-set-prop! c :pulse-last-changed @*pulse*))
 
      ;; we optimize here because even if unchanged we may not have c-useds,
      ;; now that, with the :freeze option, we are doing "late" optimize-away
@@ -314,97 +315,95 @@
        (optimize-away?! c prior-value)
        (mxtrc-cell c :cva-post-optimize-away))
 
-     (when (or (not (some #{prior-state} [:valid :uncurrent]))
-               force-propagate? ;; forcing
-               (when-not force-no-propagate?
-                 value-changed?))
-       ;; --- something happened ---
-       ;; --- data flow propagation -----------
-       (let [optimized-away? (c-optimized-away? c)]
-         (mxtrc-cell c :cva-sth-happened :propagation-code propagation-code :optimized-away? optimized-away?)
-         (when-not optimized-away?
-           (assert (map? @c))
-           (mxtrc-cell dbg? :cva-calls-propagate :callers-count (count callers) :prior-value prior-value)
-           (propagate c prior-value callers))))))
+     (when (or (not (#{:valid :uncurrent} prior-state))
+               force-propagate?
+               (when-not force-no-propagate? value-changed?))
+       ;; --- something happened / data flow propagation -----------
+       (when-not (c-optimized-away? c)
+         (assert (map? @c))
+         (mxtrc-cell dbg? :cva-calls-propagate :callers-count (count callers) :prior-value prior-value)
+         (propagate c prior-value callers)))))
+
   new-value)
 
 ;; --- unlinking ----------------------------------------------
 
-(defn md-cell-flush [c]
-  (assert (c-ref? c))
+(defn- md-cell-flush
+  "Flushes it from its model if it has one & record the flush."
+  [c]
   (when-let [me (c-model c)]
-    (mxtrc-cell c :opti :md-cell-flush (cinfo c) :mi (minfo me))
-    (rmap-meta-setf [:cells-flushed me]
-                    (conj (:cells-flushed (meta me))
-                          [(c-prop c) :val (c-value c) :pulse (c-pulse-watched c)]))))
+    (let [p (c-prop c)
+          r [p :val (c-value c) :pulse (c-pulse-watched c)]]
+      (meta-map-swap-prop! me :cz assoc p nil)
+      ;; recording the flush
+      (meta-map-swap-prop! me :cells-flushed conj r)
+      (mxtrc-cell c :opti :md-cell-flush (cinfo c) :mi (minfo me)))))
 
-;; --- optimize away ------------------------------------------
-;; optimizing away cells who turn out not to depend on anyone
-;; saves a lot of work at runtime.
+;; --- optimize away -------------------------------------------------------
+;; optimizing away cells who turn out not to depend on anyone saves a lot of
+;; work at runtime.
 
 (defn optimize-away?!
   "Optimizes away cells who turn out not to depend on anyone,
   saving a lot of work at runtime. A caller/user will not bother
-  establishing a link, and when we get to models cget will
-  find a non-cell in a prop and Just Use It."
+  establishing a link, and when we get to models `cget` will find a
+  non-cell in a prop and Just Use It."
   [c prior-value]
-  (when (and (c-formula? c)
-             (or (empty? (c-useds c))
-                 (= :freeze (c-optimize c))
-                 (and (= :when-value-t (c-optimize c))
-                      (not (nil? (c-value c)))))
-             (c-optimize c)
-             ;; c-streams (FNYI) may come this way repeatedly even if optimized away
-             (not (c-optimized-away? c))
-             ;; when would this not be the case? and who cares?
-             (c-valid? c)
-             ;; no prop to cache invariant result, so they have to stay around)
-             (not (c-synaptic? c))
-             ;; yes, dependent cells can be inputp
-             (not (c-input? c)))
-    (mxtrc-cell c :optimize-away)
-    (when (= :freeze (c-optimize c))
-      (unlink-from-used c :freeze))
+  (when-let [optimize (and
+                       (c-formula? c)
+                       ;; no prop to cache invariant result, so they have to
+                       ;; stay around)
+                       (not (c-synaptic? c))
+                       ;; yes, dependent cells can be input
+                       (not (c-input? c))
+                       ;; returns optimize switch/mode
+                       (c-optimize c))]
+    ;; now that cell optimizable & optimize is enabled, check the current cell
+    ;; state is optimizable
+    (when (and (or (= :freeze optimize)
+                   (empty? (c-useds c))
+                   (and (= :when-value-t optimize)
+                        (some? (c-value c))))
+               ;; c-streams (FNYI) may come this way repeatedly even if
+               ;; optimized away
+               (not (c-optimized-away? c))
+               ;; when would this not be the case? and who cares?
+               (c-valid? c))
+      (when (= :freeze (c-optimize c))
+        (unlink-from-used c :freeze))
 
-    (rmap-setf [::cty/state c] :optimized-away)
-    (c-watch c prior-value :opti-away)
+      (rmap-set-prop! c ::cty/state :optimized-away)
+      (c-watch c prior-value :opti-away)
 
-    (when-let [me (c-model c)]
-      (rmap-meta-setf [:cz me] (assoc (:cz (meta me)) (c-prop c) nil))
       (md-cell-flush c)
-      (mxtrc-cell c :optimize-away-post-flush))
 
-    ;; let callers know they need not check us for currency again
-    (doseq [caller (seq (c-callers c))]
-      (mxtrc-cell c :optimized-away-runs-caller :caller caller)
-      (ensure-value-is-current caller :opti-used c)
-      (when-not (c-optimized-away? caller)
-        (dependency-drop c caller)))
-    (mxtrc-cell c :optimized-away-resetting-cell-to-val :c-value (c-value c))
-    (#?(:clj ref-set :cljs reset!) c (c-value c))))
+      ;; let callers know they need not check us for currency again
+      (doseq [caller (seq (c-callers c))]
+        (mxtrc-cell c :optimized-away-runs-caller :caller caller)
+        (ensure-value-is-current caller :opti-used c)
+        (when-not (c-optimized-away? caller)
+          (dependency-drop c caller)))
+
+      (ref-set! c (c-value c)))))
 
 ;; --- c-quiesce -----------
 
 (defn c-quiesce [c]
   (assert (c-ref? c))
-  (when-let [onq (:on-quiesce @c)]
-    (onq c))
+  (when-let [onq (:on-quiesce @c)] (onq c))
   (unlink-from-callers c)
   (unlink-from-used c :quiesce)
-  (#?(:clj ref-set :cljs reset!) c :dead-c #_[:dead-c @c]))
+  (ref-set! c :dead-c))
 
 ;; --- md-quiesce --
 
 (defmethod md-quiesce-self :default [me]
   (mxtrc :quiesce :qself-fallthru (minfo me))
-  (when-let [onq (:on-quiesce (meta me))]
-    (onq me))
-  (doseq [c (vals (:cz (meta me)))]
-    (when c
-      ;; not if optimized away
-      (c-quiesce c)))
-  (#?(:clj ref-set :cljs reset!) me nil)
-  (rmap-meta-setf [::cty/state me] :dead))
+  (when-let [onq (:on-quiesce (meta me))] (onq me))
+  ;; cell's quiesce won't be execued if it's been optimized away
+  (doseq [c (vals (:cz (meta me))) :when c] (c-quiesce c))
+  (ref-set! me nil)
+  (meta-map-set-prop! me ::cty/state :dead))
 
 (defmethod md-quiesce :default [me]
   (mxtrc :quiesce :def-fall-thru! (minfo me))
@@ -419,9 +418,7 @@
 
 ;;--------------- change propagation  ----------------------------
 
-(declare propagate-to-callers
-
-         md-prop-cell-flushed)
+(declare propagate-to-callers)
 
 (defn propagate
   "A cell:
@@ -435,6 +432,7 @@
   (if *one-pulse?*
     (when *custom-propagator*
       (*custom-propagator* c prior-value))
+
     ;; ----------------------------------
     (binding [*depender* nil
               *call-stack* nil
@@ -459,7 +457,8 @@
 
       (propagate-to-callers c callers)
 
-      (when-not (c-optimized-away? c) ;; they get watched at the time
+      (when-not (c-optimized-away? c)
+        ;; they get watched at the time
         (when (or (c-pulse-unwatched? c)
                   ;; messy: these can get setfed/propagated twice in one pulse+
                   (some #{(c-lazy c)} [:once-asked :always true]))
@@ -509,8 +508,20 @@
                            ;; been optimized away cuz they need to know."
                            ;; Note this is why callers must be supplied, having been copied
                            ;; before the optimization step.
-                           (and (not (some #{c} (c-useds caller)))
-                                (not (c-optimized-away? c))))]
-                    :when (not skip-propagation?)]
+                           #_(and (not (some #{c} (c-useds caller)))
+                                  (not (c-optimized-away? c))))]
+                    :when (not skip-propagation?)
+
+                    ;; it is trying to say
+                    ;; "go ahead and notify caller one more time even if I have
+                    ;; been optimized away cuz they need to know." Note this is
+                    ;; why callers must be supplied, having been copied before
+                    ;; the optimization step.
+
+                    ;; TODO: this means other cell's change causing the caller
+                    ;; drops dependencies from `c`, build a test case for this
+                    ;; one
+                    :when (or (some #{c} (c-useds caller))
+                              (c-optimized-away? c))]
               (mxtrc :propagate :noti-caller (cinfo caller) :callee (cinfo c))
               (calculate-and-set caller :propagate c))))))))

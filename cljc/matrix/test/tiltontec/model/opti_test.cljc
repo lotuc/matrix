@@ -4,11 +4,12 @@
       :cljs [cljs.test :refer-macros [deftest is]])
    [tiltontec.cell.core :refer [cI]]
    [tiltontec.matrix.api :refer [cF cf-freeze with-mx]]
-   [tiltontec.model.core :refer [mget mswap!] :as md]))
+   [tiltontec.model.accessors :refer [mget mswap!]]
+   [tiltontec.model.core :refer [make]]))
 
 (deftest opti-map-value
   (with-mx
-    (let [me (md/make
+    (let [me (make
               :style (cF {:color :red}))]
       (is (= (mget me :style)
              {:color :red}))
@@ -20,7 +21,7 @@
 
 (deftest md-freeze-default
   (with-mx
-    (let [fm (md/make
+    (let [fm (make
               :aa (cI 1)
               :bb (cF (cond
                         (= 2 (mget me :aa)) (cf-freeze)
@@ -38,7 +39,7 @@
 
 (deftest md-freeze-specific
   (with-mx
-    (let [fm (md/make
+    (let [fm (make
               :aa (cI 1)
               :bb (cF (cond
                         (= 2 (mget me :aa)) (cf-freeze 17)

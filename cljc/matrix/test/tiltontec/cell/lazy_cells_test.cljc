@@ -1,12 +1,9 @@
 (ns tiltontec.cell.lazy-cells-test
   (:require
    #?(:clj [clojure.test :refer :all]
-      :cljs [cljs.test
-             :refer-macros [deftest is]])
-   #?(:cljs [tiltontec.util.base
-             :refer-macros [trx]]
-      :clj  [tiltontec.util.base
-             :refer [trx]])
+      :cljs [cljs.test :refer-macros [deftest is]])
+   #?(:cljs [tiltontec.util.trace :refer-macros [trx]]
+      :clj  [tiltontec.util.trace :refer [trx]])
    #?(:clj [tiltontec.cell.base :refer [c-callers c-useds cells-init unbound] :as cty]
       :cljs [tiltontec.cell.base
              :refer [c-callers c-useds cells-init unbound] :as cty])

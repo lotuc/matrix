@@ -4,7 +4,8 @@
    [tiltontec.cell.base :as cty]
    [tiltontec.cell.core :refer [cF cF+ cI with-c-conj]]
    [tiltontec.cell.integrity :refer [with-cc]]
-   [tiltontec.model.core :refer [make mget mset!]]))
+   [tiltontec.model.accessors :refer [mget mset!]]
+   [tiltontec.model.core :refer [make]]))
 
 (def n-events 1000)
 

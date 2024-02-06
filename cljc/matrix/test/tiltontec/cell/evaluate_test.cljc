@@ -1,13 +1,12 @@
 (ns tiltontec.cell.evaluate-test
+  #?(:cljs (:require-macros
+            [tiltontec.util.ref :refer [dosync!]]))
   (:require
    #?(:clj  [clojure.test :refer :all]
-      :cljs [cljs.test
-             :refer-macros [deftest is]])
-   #?(:cljs [tiltontec.util.base
-             :refer-macros [trx]
-             :refer [*trx?* mx-type?]]
-      :clj  [tiltontec.util.base
-             :refer [*trx?* mx-type? trx]])
+      :cljs [cljs.test :refer-macros [deftest is]])
+   #?(:cljs [tiltontec.util.trace :refer-macros [trx] :refer [*trx?*]]
+      :clj  [tiltontec.util.trace :refer [*trx?* trx]])
+   #?(:clj  [tiltontec.util.ref :refer [dosync!]])
    #?(:clj  [tiltontec.cell.base
              :refer [c-callers c-input? c-model c-prop c-prop-name c-props
                      c-useds c-valid? c-value-state] :as cty]
@@ -19,7 +18,8 @@
              :refer [c-reset! cI]]
       :clj  [tiltontec.cell.core :refer [c-reset! cF cF+ cI with-mx]])
    [tiltontec.cell.evaluate :refer [cget]]
-   [tiltontec.matrix.api :refer [fn-watch]]))
+   [tiltontec.matrix.api :refer [fn-watch]]
+   [tiltontec.util.core :refer [mx-type?]]))
 
 #?(:cljs (set! *print-level* 3))
 
@@ -98,7 +98,7 @@
                  (swap! dct inc)
                  (+ (cget c)
                     (cget b)))]
-      (#?(:clj dosync :cljs do)
+      (dosync!
        (is (= (cget d) 44))
        (is (= (cget c) 42))
        (is (= (cget b) 2))

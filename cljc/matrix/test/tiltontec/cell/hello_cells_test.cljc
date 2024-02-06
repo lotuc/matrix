@@ -3,8 +3,8 @@
   (:require
    #?(:clj [clojure.test :refer :all]
       :cljs [cljs.test :refer-macros [deftest is use-fixtures]])
-   #?(:cljs [tiltontec.util.base :refer-macros [trx]]
-      :clj  [tiltontec.util.base :refer [trx]])
+   #?(:cljs [tiltontec.util.trace :refer-macros [trx]]
+      :clj  [tiltontec.util.trace :refer [trx]])
    #?(:clj [tiltontec.cell.base :refer [cells-init] :as cty]
       :cljs [tiltontec.cell.base :refer [cells-init] :as cty])
    #?(:cljs [tiltontec.cell.core :refer-macros [cF+]

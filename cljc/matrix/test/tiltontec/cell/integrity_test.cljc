@@ -1,11 +1,14 @@
 (ns tiltontec.cell.integrity-test
+  #?(:cljs (:require-macros
+            [tiltontec.util.ref :refer [dosync!]]))
   (:require
    #?(:clj  [clojure.test :refer :all]
       :cljs [cljs.test :refer-macros [deftest is use-fixtures]])
-   #?(:cljs [tiltontec.util.base
-             :refer-macros [trx]]
-      :clj  [tiltontec.util.base
-             :refer [trx]])
+   #?(:cljs [tiltontec.util.trace :refer-macros [trx]]
+      :clj  [tiltontec.util.trace :refer [trx]])
+   #?(:clj  [tiltontec.util.ref :refer [dosync!]])
+   #?(:cljs [tiltontec.util.core :refer [throw-ex]]
+      :clj  [tiltontec.util.core :refer [throw-ex]])
    #?(:clj  [tiltontec.cell.base :refer [*pulse* c-pulse] :as cty]
       :cljs [tiltontec.cell.base :refer [*pulse* c-pulse] :as cty])
    #?(:cljs [tiltontec.cell.core
@@ -13,8 +16,7 @@
              :refer [c-reset! cI cset!]]
       :clj  [tiltontec.cell.core :refer [c-reset! c-reset-next! cF cF+ cI cset! with-mx]])
    [tiltontec.cell.evaluate :refer [cget cget]]
-   [tiltontec.matrix.api :refer [fn-watch]]
-   [tiltontec.util.core :refer [throw-ex]]))
+   [tiltontec.matrix.api :refer [fn-watch]]))
 
 (defn prn-level-3 [f]
   (binding [*print-level* 3] (f)))
@@ -22,7 +24,7 @@
 (use-fixtures :once prn-level-3)
 
 (defn watchdbg []
-  ;;(fn-watch (trx :watchdbg prop new old (type-of c)))
+  ;;(fn-watch (trx :watchdbg prop new old (type c)))
   )
 
 (deftest watch-setf
@@ -163,7 +165,7 @@
       (is (= (cget sic) 21))
       (is @watch)
       (is @run)
-      (#?(:clj dosync :cljs do)
+      (dosync!
        (reset! watch false)
        (reset! run false))
       (c-reset! sia 2)

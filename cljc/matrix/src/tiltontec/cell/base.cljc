@@ -1,35 +1,30 @@
 (ns tiltontec.cell.base
-  #?(:cljs (:require-macros [tiltontec.cell.base
-                             :refer [un-stopped without-c-dependency]]))
+  #?(:cljs (:require-macros
+            [tiltontec.cell.base :refer [un-stopped without-c-dependency]]
+            [tiltontec.util.ref :refer [any-ref? def-rmap-props dosync! make-ref
+                                        ref-swap!]]))
   (:require
-   [#?(:cljs cljs.pprint :clj clojure.pprint) :refer [pprint]]
-   #?(:cljs [tiltontec.util.base :as utm
-             :refer [mx-type?]
-             :refer-macros [def-rmap-props]]
-      :clj  [tiltontec.util.base :as utm
-             :refer [def-rmap-props mx-type?]])
-   #?(:clj [tiltontec.util.core
-            :refer [any-ref? mut-set! pr-warn]
-            :as ut]
-      :cljs [tiltontec.util.core
-             :refer [any-ref? mut-set!]
-             :refer-macros [pr-warn]
-             :as ut])))
+   #?(:clj [clojure.pprint :refer [pprint]]
+      :cljs [cljs.pprint :refer [pprint]])
+   #?(:clj [tiltontec.util.ref
+            :refer [any-ref? def-rmap-props dosync! make-ref ref-swap!]])
+   #?(:clj [tiltontec.util.trace :refer [pr-warn]]
+      :cljs [tiltontec.util.trace :refer-macros [pr-warn]])
+   [tiltontec.util.core :refer [mx-type?]]))
 
 ;; --- the Cells beef -----------------------
-(defn pulse-initial []
-  (#?(:clj ref :cljs atom) 0))
+
+(defn pulse-initial [] (make-ref 0))
 
 (def ^:dynamic *pulse* (pulse-initial))
-(def ^:dynamic *custom-propagator* nil)
+(def +client-q-handler+ (atom nil))
+
+;;; seems to be a debug related falg, when true, propagate values using
+;;; *custom-propagator* (when not set, no propagate is done).
 (def ^:dynamic *one-pulse?* false)
+(def ^:dynamic *custom-propagator* nil)
+
 (def ^:dynamic *dp-log* false)
-
-(defn pulse-now [] @*pulse*)
-
-(defn cells-init []
-  #?(:cljs (reset! *pulse* 0)
-     :clj  (dosync (ref-set *pulse* 0))))
 
 (def ^:dynamic *causation* '())
 (def ^:dynamic *call-stack* nil)
@@ -41,15 +36,13 @@ rule to get once behavior or just when fm-traversing to find someone"
   nil)
 
 (def ^:dynamic *defer-changes* false)
-(def +client-q-handler+ (atom nil))
+
+(defn pulse-now [] @*pulse*)
+(defn cells-init [] (dosync! (ref-swap! *pulse* (constantly 0))))
 
 (defonce unbound (gensym "unbound-cell-value"))
-(defn when-bound [x]
-  (when (not= x unbound) x))
 
-(defn cache-value [cache]
-  (when-bound cache))
-
+;;; todo: seems that value won't ever been set to uncurrent
 (defonce uncurrent (gensym "uncurrent-formulaic-value"))
 
 (def ^:dynamic *quiesce* false)
@@ -62,14 +55,9 @@ rule to get once behavior or just when fm-traversing to find someone"
                     :ephemeral-reset
                     :change])
 
-(defn unfin-biz-build []
-  (into {} (for [i +ufb-opcodes+]
-             [i (#?(:cljs atom :clj ref) [])])))
+(defn unfin-biz-build [] (into {} (for [i +ufb-opcodes+] [i (make-ref [])])))
 
-(def ^:dynamic *unfinished-business*
-  (unfin-biz-build))
-
-;;; -----------------------------
+(def ^:dynamic *unfinished-business* (unfin-biz-build))
 
 (def ^:dynamic *within-integrity* false)
 
@@ -90,36 +78,9 @@ rule to get once behavior or just when fm-traversing to find someone"
   `(binding [*depender* nil]
      ~@body))
 
-(defn +cause []
-  (first *causation*))
-
-;; --- 19000 ----------------------------------
-
-(defn c-stopper [why]
-  ;; in webserver, make sure each thread binds this freshly
-  (reset! +stop+ why))
-
-(def +c-stopper+ (atom c-stopper))
-
-(defn c-stop
-  ([] (c-stop true))
-  ([why]
-   (@+c-stopper+ why)))
-
-(defn c-stopped []
-  @+stop+)
-
 (defmacro un-stopped [& body]
   `(when-not @+stop+
      ~@body))
-
-(defn ustack$ [tag]
-  ;; debug aid
-  (str tag "ustack> " (vec (map (fn [c] (:prop @c)) *call-stack*))))
-
-(defn c-break [& args]
-  (when-not @+stop+
-    (ut/throw-ex "c-break" {:args args})))
 
 (defmacro c-warn [& args]
   `(when-not @+stop+
@@ -143,6 +104,10 @@ rule to get once behavior or just when fm-traversing to find someone"
   useds users callers optimize ephemeral? code
   lazy synapses synaptic? async?)
 
+(defn c-model [rc] (c-me rc))
+
+(defn c-prop-name [rc] (c-prop rc))
+
 (defn c-code$ [c]
   (with-out-str (binding [*print-level* 20]
                   (pprint (:code @c)))))
@@ -159,30 +124,32 @@ rule to get once behavior or just when fm-traversing to find someone"
       (not (contains? @c ::state))
       (= :optimized-away (::state @c))))
 
-(defn c-model [rc]
-  (:me @rc))
+(defn c-optimized-away-value
+  "Return a vector wrapped value of a cell which has been optimized
+  away, or nil if it has not."
+  [c]
+  (assert (c-ref? c) "c-awy?-got-not-c")
+  (let [v @c]
+    (cond
+      ;; non-cell, which means a optimized away value.
+      (or (not (map? v)) (not (contains? v ::state))) [v]
+      ;; state indicated optimized away, extract the value
+      (= :optimized-away (::state v)) [(:value v)])))
 
 (defn c-md-name [c]
   (if-let [md (c-model c)]
-    (or (:name @md)
-        "anon")
+    (or (:name @md) "anon")
     "no-md"))
 
-(defn c-prop-name [rc]
-  (:prop @rc))
-
 (defn c-value-state [rc]
-  (let [v (c-value rc)]
-    (cond
-      (= v unbound) :unbound
-      (= v uncurrent) :uncurrent
-      :else :valid)))
+  (condp = (c-value rc)
+    unbound :unbound
+    uncurrent :uncurrent
+    :valid))
 
-(defn c-unbound? [rc]
-  (= :unbound (c-value-state rc)))
+(defn c-unbound? [rc] (= :unbound (c-value-state rc)))
 
-(defn c-valid? [rc]
-  (= :valid (c-value-state rc)))
+(defn c-valid? [rc] (= :valid (c-value-state rc)))
 
 (defn c-pulse-unwatched? [c]
   (if-let [pulse-watched (c-pulse-watched c)]
@@ -193,19 +160,20 @@ rule to get once behavior or just when fm-traversing to find someone"
 
 (defn dependency-record [used]
   (when-not (c-optimized-away? used)
-    (mut-set! *depender* :useds (conj (c-useds *depender*) used))
-    (mut-set! used :callers (conj (c-callers used) *depender*))))
+    (ref-swap! *depender* update :useds (fnil conj #{}) used)
+    (ref-swap! used update :callers (fnil conj #{}) *depender*)))
 
 (defn dependency-drop [used caller]
-  (mut-set! caller :useds (disj (c-useds caller) used))
-  (mut-set! used :callers (disj (c-callers used) caller)))
+  (ref-swap! caller update :useds (fnil disj #{}) used)
+  (ref-swap! used update :callers (fnil disj #{}) caller))
 
 (defn unlink-from-callers [used]
   (doseq [caller (c-callers used)]
     (dependency-drop used caller)))
 
 (defn unlink-from-used
-  "Tell dependencies they need not notify us when they change, then clear our record of them."
+  "Tell dependencies they need not notify us when they change, then
+  clear our record of them."
   [caller _why]
   (doseq [used (c-useds caller)]
     (dependency-drop used caller)))
@@ -218,21 +186,16 @@ rule to get once behavior or just when fm-traversing to find someone"
 
 ;; --- defmodel rizing ---------------------
 
-(defn md-ref? [x]
-  ;;(trx :md-ref?-sees x)
-  (any-ref? x))
+(defn md-ref? [x] (any-ref? x))
+
 ;; hhack (mx-type? x ::model)
 
 ;; --- mdead? ---
 
-(defn md-state [me]
-  (::state (meta me)))
+(defn md-state [me] (::state (meta me)))
 
-(defn mdead? [me]
-  (= :dead (md-state me)))
+(defn mdead? [me] (= :dead (md-state me)))
 
 ;;---
 
-(defn md-prop-owning? [_class-name _prop-name]
-  ;; hhack
-  false)
+(defn md-prop-owning? [_class-name _prop-name] false) ;; hhack

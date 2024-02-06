@@ -1,4 +1,6 @@
 (ns tiltontec.cell.opti-freeze-test
+  #?(:cljs (:require-macros
+            [tiltontec.util.ref :refer [dosync!]]))
   (:require
    #?(:clj  [clojure.test :refer :all]
       :cljs [cljs.test :refer-macros [deftest is use-fixtures]])
@@ -9,6 +11,7 @@
              :refer-macros [cF cF+ c-swap! cf-freeze with-mx]
              :refer [c-reset! cI]]
       :clj  [tiltontec.cell.core :refer [c-reset! c-swap! cF cF+ cf-freeze cI with-mx]])
+   #?(:clj [tiltontec.util.ref :refer [dosync!]])
    [tiltontec.cell.evaluate :refer [cget]]))
 
 (defn prn-level-3 [f]
@@ -60,7 +63,7 @@
                        (+ (cget a) (cget b) (cget c))
                        (do (reset! frozen true)
                            _cache)))))]
-      (#?(:clj dosync :cljs do)
+      (dosync!
        (is (= (cget a) 1))
        (is (= (cget b) 42))
        (is (= (cget c) 43))
@@ -121,7 +124,7 @@
                  (if (< (cget a) 3)
                    (+ (cget a) (cget b) (cget c))
                    (cf-freeze _cache)))]
-      (#?(:clj dosync :cljs do)
+      (dosync!
        (is (= (cget a) 1))
        (is (= (cget b) 42))
        (is (= (cget c) 43))
@@ -202,4 +205,3 @@
       (is (= 42 (cget b)))
       (prn :cnow (cget c))
       (is (= [:bam 42] (cget c))))))
-

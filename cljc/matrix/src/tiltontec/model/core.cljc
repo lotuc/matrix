@@ -1,149 +1,105 @@
 (ns tiltontec.model.core
-  {:clj-kondo/ignore [:redundant-do]}
-  #?(:cljs (:require-macros [tiltontec.model.core :refer [cFkids with-par]]))
+  #?(:cljs (:require-macros
+            [tiltontec.model.core :refer [with-par mpar]]
+            [tiltontec.util.ref :refer [dosync! make-ref ref-swap!
+                                        meta-map-set-prop! ref-swap! rmap-set-prop!]]))
   (:require
-   #?(:cljs [tiltontec.cell.core :refer-macros [cF] :refer [c-reset!]]
-      :clj  [tiltontec.cell.core :refer [c-reset! cF]])
-   [clojure.set :refer [difference]]
-   [tiltontec.cell.base
-    :refer [*depender* c-ref? c-warn md-ref? mdead? unbound
-            without-c-dependency]
-    :as cty]
-   [tiltontec.cell.diagnostic :refer [cinfo minfo mxtrc mxtrc-cell]]
-   [tiltontec.cell.evaluate :refer [cget]]
+   #?(:clj [tiltontec.util.ref
+            :refer [dosync! make-ref meta-map-set-prop! ref-swap!
+                    rmap-set-prop!]])
+   [tiltontec.cell.base :refer [c-input? c-ref? c-value md-state unbound] :as cty]
    [tiltontec.cell.integrity :refer [with-integrity]]
-   [tiltontec.cell.poly :refer [md-quiesce md-quiesce-self watch]]
-   [tiltontec.model.base :refer [md-awaken md-cell md-install-cell]]
-   [tiltontec.util.base :refer [mx-sid-next mx-type trx]]
-   [tiltontec.util.core :refer [any-ref? rmap-meta-setf throw-ex]]))
+   [tiltontec.cell.poly :refer [c-awaken md-awaken-before watch]]
+   [tiltontec.util.trace :refer [mx-sid-next]]))
 
 (def matrix
   "Each app will populate this with the root of its application matrix."
   (atom nil))
 
+(defn md-cz
+  "`cz` is a map of prop-name (of model `me`) to cells."
+  [me]
+  (:cz (meta me)))
+
+(defn md-cell
+  "Return the cell for `prop` in model `me`."
+  ([me prop] (prop (:cz (meta me))))
+  ([me prop not-found] (prop (:cz (meta me)) not-found)))
+
 (defn md-name [me]
   (:name @me))
 
-(defn mget?
-  ([me prop]
-   (mget? me prop nil))
-  ([me prop alt-val]
-   (assert me (str "mget passed nil for me accessing prop: " prop))
-   (assert (any-ref? me) (str "mget passed non-model for me accessing prop: " prop ": " me))
-   (if (contains? @me prop)
-     (if-let [c (md-cell me prop)]
-       (do
-         (mxtrc-cell c :mget-sees-c? :model me :prop prop :cinfo (cinfo (md-cell me prop)))
-         (cget c))
-       (prop @me))
-     alt-val)))
-
-(defn mget [me prop]
-  (let [v (mget? me prop ::no-such-prop)]
-    (when (= v ::no-such-prop)
-      (c-warn
-       "MXAPI_ILLEGAL_GET_NO_SUCH_prop> mget was attempted on non-existent prop \"" prop "\"."
-       "\n...> FYI: known props are" (keys @me)
-       "\n...> FYI: use mget? if prop might not exist.")
-      (throw-ex "MXAPI_ILLEGAL_GET_NO_SUCH_prop> mget was attempted on non-existent prop" {:model me :prop prop}))
-    v))
-
-(defmacro def-mget [reader-prefix & props]
-  `(do
-     ~@(map (fn [prop#]
-              `(defn ~(symbol (str (or reader-prefix "") (name prop#)))
-                 [~'ref]
-                 (tiltontec.model.core/mget ~'ref ~(keyword (name prop#))))) props)))
-
 (def ^:dynamic *parent* nil)
 
-(defmacro with-par [meform & body]
-  `(binding [tiltontec.model.core/*parent* ~meform]
-     ~@body))
+(defn- md-install-cell
+  "Install a cell in a model, and return true if the cell is a `c-ref?`.
+   If the cell is a ref, then the model will be installed as the
+  cell's :me.
 
-;;; --- accessors ----
+  note that c (a misnomer) might not be a Cell."
+  [me prop c]
+  (let [is-c-ref (c-ref? c)]
+    (if is-c-ref
+      (do
+        (ref-swap! c assoc :prop prop :me me)
+        (rmap-set-prop! me prop (when (c-input? c) (c-value c))))
+      (rmap-set-prop! me prop c))
+    is-c-ref))
 
-(defn mset! [me prop new-value]
-  (assert me)
-  (if-let [c (md-cell me prop)]
-    (c-reset! c new-value)
-    (throw-ex
-     (if (contains? @me prop)
-       (do (c-warn
-            "MXAPI_ILLEGAL_MUTATE_NONCELL> invalid mswap!/mset!/mset! to the property '" prop "', which is not mediated by any cell.\n"
-            "...> if such post-make mutation is in fact required, wrap the initial argument to model.core/make in 'cI'. eg: (make... :answer (cI 42)).\n"
-            "...> look for MXAPI_ILLEGAL_MUTATE_NONCELL in the Errors documentation for  more details.\n"
-            "...> FYI: intended new value is [" new-value "]; initial value was [" (get @me prop :no-such-prop) "].\n"
-            "...> FYI: instance is of type " (mx-type me) ".\n"
-            "...> FYI: full instance is " @me "\n"
-            "...> FYI: instance meta is " (meta me) "\n.")
-           "MXAPI_ILLEGAL_MUTATE_NONCELL> invalid mswap!/mset!/mset! to the property which is not mediated by any cell")
-       (do (c-warn "MXAPI_ILLEGAL_MUTATE_NO_SUCH_prop> mswap!/mset!/mset! was attempted to non-existent prop \"" prop "\".\n"
-                   "...> FYI: known props are" (keys @me))
-           "MXAPI_ILLEGAL_MUTATE_NO_SUCH_prop> mswap!/mset!/mset! was attempted to non-existent prop"))
-     {:model me :prop :prop :new-value new-value})))
+(defn md-awaken
+  "(1) do initial evaluation of all ruled props
+   (2) call watchs of all props"
+  [me]
+  (assert me "md-awaken passed nil")
+  (md-awaken-before me)
+  (let [s (md-state me)]
+    (assert (= :nascent s)
+            (str "md-awaken> state not nascent post-awaken-before: " (or s :NIL) " meta: " (meta me))))
+  (meta-map-set-prop! me ::cty/state :awakening)
+  (doseq [prop (keys @me)]
+    ;; next is tricky: if prop is in :cz but nil, it has been
+    ;; optimized-away and watched then in the rare case
+    ;; it gets optimized away on other than the initial value.
+    (when-let [c (md-cell me prop :not-found)]
+      (if (= c :not-found)
+        ;; these need at least an initial watch
+        (watch prop me (prop @me) unbound nil)
+        (c-awaken c))))
+  (meta-map-set-prop! me ::cty/state :awake)
+  me)
 
-(defn mreset!
-  "alternate syntax conforming with clojure terminology"
-  [me prop new-value]
-  (mset! me prop new-value))
-
-(defn mswap! [me prop swap-fn & swap-fn-args]
-  (mset! me prop (apply swap-fn (mget me prop) swap-fn-args)))
-
-(defn make [& arg-list]
-  (if (odd? (count arg-list))
-    (apply make :mx-type arg-list)
-    (#?(:clj dosync :cljs do)
-     (let [iargs (apply hash-map arg-list)
+(defn make
+  "Create a model whose parent is *parent*."
+  [& args]
+  (if (odd? (count args))
+    (apply make :mx-type args)
+    (dosync!
+     (let [arg-map (apply hash-map args)
            meta-keys #{:mx-type :on-quiesce}
-           iargs-without-meta (apply dissoc iargs meta-keys)
-           me (#?(:clj ref :cljs atom)
-               (->> iargs-without-meta
+           props-map (apply dissoc arg-map meta-keys)
+           me (make-ref
+               (->> props-map
                     (map (fn [[k v]] [k (if (c-ref? v) unbound v)]))
                     (into {:parent *parent*}))
-               :meta {::cty/state :nascent
+               :meta {:tiltontec.cell.base/state :nascent
                       :mx-sid     (mx-sid-next)
-                      :mx-type    (get iargs :mx-type ::cty/model)
-                      :on-quiesce (get iargs :on-quiesce)})
-           cz (->> iargs-without-meta
+                      :mx-type    (get arg-map :mx-type ::cty/model)
+                      :on-quiesce (get arg-map :on-quiesce)})
+           cz (->> props-map
                    (filter (fn [[prop v]] (md-install-cell me prop v)))
                    (map vec)
                    (into {}))]
 
-       (rmap-meta-setf [:cz me] cz)
+       (meta-map-set-prop! me :cz cz)
 
        (with-integrity [:awaken me]
          (md-awaken me))
 
        me))))
 
-;;; --- family ------------------------------------
-
-(def mm-obj #?(:clj Object :cljs js/Object))
-
-(defn md-kids [me] (mget me :kids))
-
-(defn fm-kids-watch [me newk oldk _c]
-  (when-not (= oldk unbound)
-    (let [lostks (difference (set oldk) (set newk))]
-      (when-not (empty? lostks)
-        (mxtrc :quiesce :fm-kids-watch (minfo me) :lostks (count lostks))
-        (doseq [k lostks]
-          (md-quiesce k))))))
-
-(defmethod watch [:kids ::family]
-  [_prop me newk oldk c]
-  (fm-kids-watch me newk oldk c))
-
-(defmethod md-quiesce ::family
-  [me]
-  (mxtrc :quiesce :family-md-quies-entry! (minfo me))
-  (doseq [k (:kids @me)]
-    (when (md-ref? k)
-      (mxtrc :quiesce :family-md-quiKID! (minfo me))
-      (md-quiesce k)))
-  (md-quiesce-self me))
+(defmacro with-par [m & body]
+  `(binding [tiltontec.model.core/*parent* ~m]
+     ~@body))
 
 (defn md-par [me]
   (:parent @me))
@@ -151,254 +107,3 @@
 (defmacro mpar [& [me]]
   (let [me (or me 'me)]
     `(:parent @~me)))
-
-(defmacro mdv!
-  "Search matrix ascendents from node 'me' looking for `what`, and extract `prop`"
-  [what prop & [me]]
-  (let [me (or me 'me)]
-    `(mget (tiltontec.model.core/fm! ~what ~me) ~prop)))
-
-(defn fm-navig=
-  "Return true if 'poss' is the matrix reference we 'seek'
-
-   There are 4 branches to this.
-
-   'poss' is not a ref, return false
-   'seek' is a fn?, we return result of invoke it with 'poss'
-   'seek' is a keyword?, we return true if it is = with (:name poss)
-   :else compare 'poss' and 'seek' directly using ="
-
-  [seek poss]
-  (assert (or (any-ref? poss) (string? poss))
-          (str "poss not ref " (string? poss)))
-  (mxtrc :fm-navig= :fn?-seek (fn? seek) :keyword?-seek (keyword? seek))
-  (cond
-    ;; string child of html label?
-    (not (any-ref? poss))
-    (do (mxtrc :fm-navig=bailnotref :poss poss)
-        false)
-
-    (fn? seek)
-    (do (mxtrc :fm-navig=trying-fn)
-        (seek poss))
-
-    (keyword? seek)
-    (do (mxtrc :fm-navig=sees :seek seek :poss-name (:name @poss) :poss-mx-type (mx-type poss))
-        (or (= seek (:name @poss))
-            (isa? (mx-type poss) seek)))
-
-    :else
-    (do (mxtrc :fm-navig=-else-pplain=! :seek seek)
-        (= seek poss))))
-
-(defn fasc-higher [what where options]
-  (assert where (str "fasc-higher> 'where' arg is nil seeking " what :options options))
-  (assert (not (mdead? where))
-          (str "fasc-higher> reaches dead 'where' " (minfo where) :seeking what))
-  (assert what (str "fasc-higher> 'what' arg is nil searching from " (minfo where) :options options))
-  (mxtrc :navig :action :fasc-higher :what what :where (minfo where))
-  (or (and (:me? options)
-           (fm-navig= what where)
-           where)
-      (when-let [par (:parent @where)]
-        (fasc-higher what par
-                     (assoc options :me? true)))))
-
-(defn fasc
-  "Search matrix ascendents for 'what', starting at 'where'
-   See fm-navig= for options about 'what' can be
-   if :me? is true, and (fm-navig= what where) return 'where'
-   if (:parent @where) returns a parent, recurse up the family tree
-   return an error when (:must? options) is true and we nothing is found"
-  [what where & options]
-  (assert where (str "fasc> 'where' arg is nil seeking " what :options options))
-  (assert (not (mdead? where))
-          (str "fasc> pass dead 'where' " (minfo where) :seeking what))
-  (assert what (str "fasc> 'what' arg is nil searching from " (minfo where) :options options))
-  (mxtrc :navig :action :fasc-entry :what what :where (minfo where))
-  (try
-    (let [options (merge {:me?   false
-                          :wocd? true
-                          :must? true}
-                         (apply hash-map options))]
-      (binding [*depender* (if (:wocd? options) nil *depender*)]
-        (or (fasc-higher what where options)
-            (when (:must? options)
-              (mxtrc :fasc-failed :what what :from (minfo where) :options options)
-              (when (and (not (:me? options))
-                         (fm-navig= what where))
-                (mxtrc :fasc-failed-with-me?-option-false-but-me-matches-what!!!!!!!!))
-              (loop [md (if (:me? options) where (:parent @where))]
-                (when md
-                  (mxtrc :fasc-fail-saw :from (minfo md))
-                  (recur (:parent @md))))
-              (mxtrc :fasc-failed-asc-end)
-              nil))))
-    (catch #?(:clj Exception :cljs js/Error) e
-      (mxtrc :fasc-sees-err-returns-nil :err e)
-      nil)))
-
-(defn nextsib [mx]
-  (without-c-dependency
-   (loop [sibs (md-kids (md-par mx))]
-     (when sibs
-       (if (= mx (first sibs))
-         (second sibs)
-         (recur (rest sibs)))))))
-
-(defn prevsib [mx]
-  (without-c-dependency
-   (loop [sibs (md-kids (md-par mx))]
-     (when sibs
-       (cond
-         (= mx (first sibs)) nil
-         (= mx (second sibs)) (first sibs)
-         :else
-         (recur (rest sibs)))))))
-
-(defn fm-navig
-  "Search matrix ascendents and descendents for 'what', starting at 'where'
-
-   if :me? is true, and (fm-navig= what where) return 'where' (:me? is false by default)
-
-   if :inside? is true, try kids recursively (after removing any listed in :skip option)
-
-   if :up? is true, invoke fm-navig on ancestor (skipping 'where')"
-  {:style/indent 1}
-  [what where & options]
-  ;; (mxtrc :fm-navig-entry :where (if (any-ref? where) [(:tag @where)(:class @where)] where) :any-ref?-where (any-ref? where))
-  (when (and where what (any-ref? where))
-    (let [options (merge {:must? true :me? false, :inside? false, :up? true,
-                           ;; without-c-dependency
-                          :wocd? true}
-                         (apply hash-map options))]
-      (binding [*depender* (if (:wocd? options) nil *depender*)]
-        (when (any-ref? where)
-          (or (and (:me? options)
-                   (fm-navig= what where)
-                   where)
-
-              (and (:inside? options)
-                   (if-let [kids (mget? where :kids)]
-                     (do
-                       (trx nil :inside-kids!!! (:name @where))
-                       (if-let [netkids (remove #{(:skip options)} kids)]
-                         (do
-                           (some #(fm-navig what %
-                                            :must? false
-                                            :me? true
-                                            :inside? true
-                                            :up? false) netkids))
-                         (trx nil :no-net-kids)))
-                     (trx nil :inside-no-kids (:name @where))))
-
-              (and (:up? options)
-                   (when-let [par (:parent @where)]
-                     (fm-navig what par
-                               :must? false
-                               :up? true
-                               :me? true
-                               :skip where
-                               :inside? true)))
-
-              (when (:must? options)
-                (throw-ex "fm-navig: model not found"
-                          {:what what :where where :options options}))))))))
-
-(defn fm!
-  "Search matrix ascendents and descendents from node 'where', for 'what', throwing an error when not found"
-  [what where]
-  (fm-navig what where :me? false :inside? true :must? true :up? true))
-
-(defn mxu-find-name
-  "Search matrix ascendents from node 'where' looking for element with given name"
-  [where name]
-  (fm-navig #(= name (mget? % :name))
-    where :me? false :up? true :inside? false))
-
-(defmacro fmu [name & [me]]
-  "Search matrix ascendents from node 'me' (defaulting to 'me in current scope) looking for element with given name"
-  (let [me-ref (or me 'me)]
-    `(let [name# ~name]
-       (fm-navig #(= name# (mget? % :name))
-         ~me-ref :me? false :up? true :inside? false))))
-
-(defn mxu-find-id
-  "Search matrix ascendents from node 'where' looking for element with given id"
-  [where id]
-  (fm-navig #(= id (mget? % :id))
-    where :me? false :up? true :inside? false))
-
-(defn mxu-find-type
-  "Search matrix ascendants from node 'me' for first with given tag"
-  [me type]
-  (assert me)
-  (fasc (fn [visited]
-          (= type (mx-type visited))) me))
-
-(defn fmi-w-class
-  "Search matrix descendents from 'where' for first with given :class"
-  [where class]
-  (fm-navig #(when (any-ref? %)
-               (= class (mget? % :class)))
-    where :inside? true :up? false))
-
-(defn mxi-find
-  "Search matrix descendents from node 'where' for node with property and value"
-  [where property value]
-  (fm-navig #(when (any-ref? %)
-               (= value (mget? % property)))
-    where :inside? true :up? false))
-
-(defn fmo
-  "Search matrix ascendents from node 'me' for 'id-name', trying first as a name, then as an id"
-  [me id-name]
-  (or (mxu-find-name me id-name)
-      (mxu-find-id me id-name)
-      (throw (ex-info (str "fmo> not id or name " id-name) {:id-name id-name}))))
-
-(defn fmov
-  "Use 'fmo' and extract :value (or prop indicated by :prop-name)"
-  ([me id-name]
-   (fmov me id-name :value))
-  ([me id-name prop-name]
-   (when-let [mx (fmo me id-name)]
-     (if (contains? @mx prop-name)
-       (mget mx prop-name)
-       (throw (ex-info (str "fmov> " id-name " lacks " prop-name " property") {:id-name id-name :prop-name prop-name}))))))
-
-(defmacro the-kids
-  "Macro to flatten kids in 'tree' and relate them to 'me' via the *parent* dynamic binding"
-  [& tree]
-  `(binding [*parent* ~'me]
-     (assert *parent*)
-     (doall (remove nil? (flatten (list ~@tree))))))
-
-(defmacro cFkids
-  "Syntax sugar for formulae that define :kids props"
-  [& tree]
-  `(cF (assert ~'me "no me for cFkids")
-       (the-kids ~@tree)))
-
-(defn kid-values-kids
-  "A pattern commonly employed in matrix applications is to define a :kid-factory on some
-   'parent' cell, and use it to enrich the value extracted from the parent's kid cells.
-
-   This function maps across the :kids-values, invoking the factory as it goes"
-  [me x-kids]
-  (let [k-key (mget me :kid-key)
-        _ (assert k-key ":k-key not found")
-        k-factory (mget me :kid-factory)
-        _ (assert k-factory ":kid-factory not found.")
-
-        x-kids (when (not= x-kids unbound)
-                 (into {} (for [k x-kids]
-                            [(k-key k) k])))]
-
-    (doall
-     (map-indexed
-      (fn [_idx kid-value]
-        (or (and x-kids (get x-kids kid-value))
-            (binding [*parent* me]
-              (k-factory me kid-value))))
-      (mget me :kid-values)))))
