@@ -5,11 +5,29 @@
 
 ;;; --- life cycle -------------------
 
-(defmulti c-awaken mx-type)
-(defmulti md-awaken-before mx-type)
+(defmulti c-awaken
+  "You may not want to override this method, it's major implementation
+  is in `evaluate` which implements `cell` and `c-formula`'s awaken
+  behavior."
+  mx-type)
+
+(defmulti md-awaken-before
+  "Being called just before model being awaken."
+  mx-type)
+
+(defmulti md-quiesce
+  "`quiesce` behavior for given type. The default behavior in `evaluate`
+  is just `quiesce` the model itself by calling `md-quiesce-self`. A
+  more advanced behavior can be found `tiltontec.model.family`, it
+  `quiesce` all the model's descendants and then call
+  `md-quiesce-self` to quiesce itself."
+  mx-type)
+
+(defmulti md-quiesce-self
+  "Do some actual `quiesce` behavior on the model itself."
+  mx-type)
+
 (defmethod md-awaken-before :default [me])
-(defmulti md-quiesce mx-type)
-(defmulti md-quiesce-self mx-type)
 
 ;;; --- change -----------------
 
@@ -24,11 +42,20 @@
 
 ;;; --- watch --------------------------
 
-(defmulti watch-by-type (fn [prop-name me new-val old-val c] [(mx-type me)]))
+(defmulti watch
+  "The watch multimethod is baked into cell's life cycle, it's default
+  behavior is calling the `watch-by-type`."
+  (fn [prop-name me new-val old-val c] [prop-name (mx-type me)]))
 
-(defmethod watch-by-type :default [prop me new-val old-val c])
+(defmulti watch-by-type
+  "Notice that `watch-by-type` is just a default behavior of triggered
+  by `watch`, meaning that if you override the `watch` for given model
+  type, this method may not be called."
+  (fn [prop-name me new-val old-val c] [(mx-type me)]))
 
-(defmulti watch (fn [prop-name me new-val old-val c] [prop-name (mx-type me)]))
+;;; default `watch` & `watch-by-type` behaviors.
 
 (defmethod watch :default [prop me new-val old-val c]
   (watch-by-type prop me new-val old-val c))
+
+(defmethod watch-by-type :default [prop me new-val old-val c])
