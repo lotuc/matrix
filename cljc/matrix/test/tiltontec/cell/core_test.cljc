@@ -23,7 +23,7 @@
              :refer [c-reset! cI make-cell]]
       :clj  [tiltontec.cell.core
              :refer [c-reset! cF cF+ cFn cFonce cI make-cell with-mx]])
-   [tiltontec.cell.evaluate :refer [cget]]
+   [tiltontec.cell.evaluate :refer [c-quiesce cget]]
    [tiltontec.cell.poly :refer [c-awaken]]
    [tiltontec.matrix.api :refer [fn-watch]]))
 
@@ -188,12 +188,10 @@
       (is (c-input? c))
       (is (nil? (c-model c)))
       (is (= :cool (c-prop c) (c-prop-name c)))
-      (dosync!
-       (tiltontec.cell.evaluate/c-quiesce c))
+      (dosync! (c-quiesce c))
       (is (not (nil? @cc)))
 
       (let [c @cc]
         (is (= :cool (:prop c)))))))
 
-#?(:cljs (do
-           (cljs.test/run-tests)))
+#?(:cljs (do (cljs.test/run-tests)))

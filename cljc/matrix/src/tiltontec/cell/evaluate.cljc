@@ -369,6 +369,20 @@
                (not (c-optimized-away? c))
                ;; when would this not be the case? and who cares?
                (c-valid? c))
+      (when (:on-quiesce @c)
+        (let [prop (c-prop-name c)]
+          (c-warn "optimize-away?!> on-quiesce detected on cell, but it will be ignored since the cell is being optimized away '"
+                  prop "' of model '" (c-md-name c) "'.\n"
+                  "...> formula for " prop ":\n"
+                  (c-code$ c)
+                  "\n...> full cell: \n"
+                  @c
+                  "\n\n...> callstack, latest first: \n"
+                  (str/join "\n" (mapv (fn [cd]
+                                         (str "....> md-name:" (c-md-name cd) " prop: " (c-prop-name cd)
+                                              "\n....>    code:" (c-code$ cd)))
+                                       *call-stack*)))))
+
       (when (= :freeze (c-optimize c))
         (unlink-from-used c :freeze))
 

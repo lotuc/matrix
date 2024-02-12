@@ -12,7 +12,7 @@
              :refer [c-reset! cI]]
       :clj  [tiltontec.cell.core :refer [c-reset! c-swap! cF cF+ cf-freeze cI with-mx]])
    #?(:clj [tiltontec.util.ref :refer [dosync!]])
-   [tiltontec.cell.evaluate :refer [cget]]))
+   [tiltontec.cell.evaluate :refer [c-quiesce cget]]))
 
 (defn prn-level-3 [f]
   (binding [*print-level* 3] (f)))
@@ -205,3 +205,34 @@
       (is (= 42 (cget b)))
       (prn :cnow (cget c))
       (is (= [:bam 42] (cget c))))))
+
+(deftest t-optimized-away-cell-lifecycle-functions
+  (with-mx
+    (let [quiesce-record (atom nil)
+          watch-record (atom [])
+          c0 (cI 0)
+          c1 (cF+ [:on-quiesce (fn [c] (reset! quiesce-record @c))
+                   :watch (fn [_prop _me new old _c]
+                            (swap! watch-record conj [(cget c0) old new]))]
+                  (if (= (cget c0) -1)
+                    (cf-freeze)
+                    (cget c0)))]
+      (is (nil? @quiesce-record))
+
+      (is (= 0 (cget c1)))
+      (is (= [[0 cty/unbound 0]] @watch-record))
+
+      (c-reset! c0 42)
+      (is (= [[0 cty/unbound 0] [42 0 42]] @watch-record))
+      (is (= 42 (cget c1)))
+
+      (c-reset! c0 -1)
+      ;; c1's value is not changed, but c1 is now optimized away because of c0
+      ;; becomes -1, so the watch function is called for the last time.
+      (is (= [[0 cty/unbound 0] [42 0 42] [-1 42 42]] @watch-record))
+      (is (= 42 (cget c1)))
+
+      ;; c1 is optimized away, that cause on-quiesce function to be *never*
+      ;; called!.
+      (dosync! (c-quiesce c1))
+      (is (nil? @quiesce-record)))))
