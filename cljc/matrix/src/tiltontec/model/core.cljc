@@ -60,11 +60,17 @@
     ;; next is tricky: if prop is in :cz but nil, it has been
     ;; optimized-away and watched then in the rare case
     ;; it gets optimized away on other than the initial value.
-    (when-let [c (md-cell me prop :not-found)]
-      (if (= c :not-found)
-        ;; these need at least an initial watch
-        (watch prop me (prop @me) unbound nil)
-        (c-awaken c))))
+    ;;
+    ;; Not sure this is about optimized away cells anymore (since optimized away
+    ;; cell would go through `tiltontec.cell.evaluate/optimize-away?!` and
+    ;; already been watched, is there any other optimization path?).
+    ;;
+    ;; But for constant (non-cell) property, the extra property `watch` step is
+    ;; needed here.
+    (if-some [c (md-cell me prop)]
+      (c-awaken c)
+      ;; these need at least an initial watch
+      (watch prop me (prop @me) unbound nil)))
   (meta-map-set-prop! me ::cty/state :awake)
   me)
 

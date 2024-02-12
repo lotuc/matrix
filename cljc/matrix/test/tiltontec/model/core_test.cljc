@@ -22,7 +22,7 @@
              :refer-macros [mdv!]
              :refer [fm! fm-navig]])
    [clojure.string :as str]
-   [tiltontec.cell.poly :refer [md-quiesce]]
+   [tiltontec.cell.poly :refer [md-quiesce watch-by-type]]
    [tiltontec.matrix.api :refer [fn-watch mget mset! mswap!]]
    [tiltontec.model.core :refer [make md-cell md-cz md-name]]
    [tiltontec.model.family :refer [the-kids]]
@@ -346,6 +346,21 @@
       (is (= false (mget clk :ticking?)))
       (mset! clk :tick 5)
       (is (= true (mget clk :ticking?))))))
+
+(deftest t-md-awaken-property-watch-behavior
+  (let [records (atom [])]
+    (defmethod watch-by-type [::some-type]
+      [prop-name _me new-val old-val _c]
+      (swap! records conj [prop-name old-val new-val]))
+    (make
+     ::some-type
+     :c0 1
+     :c1 (cI 42)
+     :c2 (cF 42))
+    (is (some? @records))
+    (doseq [p [:c0 :c1 :c2]
+            :let [r (filter #(= p (first %)) @records)]]
+      (is (= 1 (count r)) (str "prop: " p)))))
 
 #?(:cljs (do
            (cljs.test/run-tests)))
