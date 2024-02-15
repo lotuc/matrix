@@ -13,22 +13,21 @@
    #?(:clj [tiltontec.util.ref
             :refer [any-ref? dosync! meta-map-set-prop! meta-map-swap-prop!
                     ref-set! ref-swap! rmap-set-prop!]])
-   #?(:clj [tiltontec.util.core :refer [mx-type prog1 set-ify throw-ex]]
+   #?(:clj [tiltontec.util.core :refer [mx-type prog1 throw-ex]]
       :cljs [tiltontec.util.core
-             :refer [mx-type set-ify throw-ex]
+             :refer [mx-type throw-ex]
              :refer-macros [prog1]])
-   [clojure.set :refer [difference]]
    [clojure.string :as str]
    [tiltontec.cell.base
     :refer [*c-prop-depth* *call-stack* *causation* *custom-propagator*
-            *defer-changes* *depender* *one-pulse?* *pulse* *quiesce*
-            c-callers c-code$ c-ephemeral? c-formula? c-input? c-lazy
-            c-md-name c-me c-model c-optimize c-optimized-away-value
-            c-optimized-away? c-prop c-prop-name c-pulse c-pulse-last-changed
-            c-pulse-unwatched? c-pulse-watched c-ref? c-rule c-state
-            c-synaptic? c-unbound? c-useds c-valid? c-value c-value-state
-            c-warn dependency-drop dependency-record md-prop-owning? mdead?
-            unlink-from-callers unlink-from-used without-c-dependency unbound]
+            *defer-changes* *depender* *one-pulse?* *pulse* c-callers c-code$
+            c-ephemeral? c-formula? c-input? c-lazy c-md-name c-me c-model
+            c-optimize c-optimized-away-value c-optimized-away? c-prop
+            c-prop-name c-pulse c-pulse-last-changed c-pulse-unwatched?
+            c-pulse-watched c-ref? c-rule c-state c-synaptic? c-useds c-valid?
+            c-value c-value-state c-warn dependency-drop dependency-record
+            mdead? unbound unlink-from-callers unlink-from-used
+            without-c-dependency]
     :as cty]
    [tiltontec.cell.diagnostic :refer [c-debug? cinfo minfo mxtrc mxtrc-cell]]
    [tiltontec.cell.poly :refer [c-awaken md-quiesce md-quiesce-self
@@ -71,19 +70,6 @@
   [c _debug-id ensurer]
 
   (cond
-    ; --------------------------------------------------
-    *quiesce*
-    ; we got kicked off during md-quiesce processing
-    ; just return what we have if valid, else nil
-    (cond
-      (c-unbound? c)
-      (do
-        (trx :unbound!!! c-prop)
-        (throw-ex "evic> unbound prop %s of model %s" {:cell c}))
-
-      (c-valid? c) ;; probably accomplishes nothing
-      (c-value c))
-
     ;; --- easy way out: our pulse is current ---------------
     (c-current? c)
     (c-value c)
@@ -462,22 +448,6 @@
               *call-stack* nil
               *c-prop-depth* (inc *c-prop-depth*)
               *defer-changes* true]
-      ;; --- manifest new value as needed ---
-      ;;
-      ;; 20061030 Trying not.to.be first because doomed instances may be interested in callers
-      ;; who will decide to propagate. If a family instance kids prop is changing, a doomed kid
-      ;; will be out of the kids but not yet quiesced. If the propagation to this rule asks the kid
-      ;; to look at its siblings (say a view instance being deleted from a stack who looks to the psib
-      ;; pb to decide its own pt), the doomed kid will still have a parent but not be in its kids prop
-      ;; when it goes looking for a sibling relative to its position.
-      (when (and prior-value
-                 (c-model c)
-                 ;; TODO: this is always false, meaning that doomed children is
-                 ;; not quiesce here.
-                 (md-prop-owning? (type (c-model c)) (c-prop c)))
-        (when-let [ownees (difference (set-ify prior-value) (set-ify (c-value c)))]
-          (doseq [ownee ownees]
-            (md-quiesce ownee))))
 
       (propagate-to-callers c callers)
 

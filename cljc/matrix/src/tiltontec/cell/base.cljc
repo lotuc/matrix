@@ -45,8 +45,6 @@ rule to get once behavior or just when fm-traversing to find someone"
 ;;; todo: seems that value won't ever been set to uncurrent
 (defonce uncurrent (gensym "uncurrent-formulaic-value"))
 
-(def ^:dynamic *quiesce* false)
-
 ;;; --- unfinished business post state change ------------------------
 
 (def +ufb-opcodes+ [:tell-dependents
@@ -190,6 +188,3 @@ rule to get once behavior or just when fm-traversing to find someone"
 
 (defn mdead? [me] (= :dead (md-state me)))
 
-;;---
-
-(defn md-prop-owning? [_class-name _prop-name] false) ;; hhack

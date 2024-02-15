@@ -7,7 +7,7 @@
    #?(:clj [tiltontec.util.ref :refer [dosync! make-ref rmap-set-prop!]])
    [tiltontec.cell.base
     :refer [*c-prop-depth* *call-stack* *causation* *custom-propagator*
-            *defer-changes* *depender* *dp-log* *one-pulse?* *pulse* *quiesce*
+            *defer-changes* *depender* *dp-log* *one-pulse?* *pulse*
             *unfinished-business* *within-integrity* c-async? c-input? c-lazy
             c-model c-prop c-prop-name c-value c-warn pulse-initial unbound
             unfin-biz-build without-c-dependency]]
@@ -275,7 +275,6 @@ execution as soon as the current change is manifested."
             *call-stack* nil
             *depender* nil
             *defer-changes* false
-            *quiesce* false
             *custom-propagator* nil
             *c-prop-depth* 0
             *one-pulse?* false
