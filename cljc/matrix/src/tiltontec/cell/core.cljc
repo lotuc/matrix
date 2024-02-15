@@ -10,7 +10,8 @@
             *defer-changes* *depender* *dp-log* *one-pulse?* *pulse*
             *unfinished-business* *within-integrity* c-async? c-input? c-lazy
             c-model c-prop c-prop-name c-value c-warn pulse-initial unbound
-            unfin-biz-build without-c-dependency]]
+            unfin-biz-build without-c-dependency]
+    :as cty]
    [tiltontec.cell.evaluate :refer [c-value-assume cget]]
    [tiltontec.util.core :refer [mx-type throw-ex]]
    [tiltontec.util.trace :refer [mx-sid-next]]))
@@ -39,7 +40,7 @@
     (make-ref
      (merge {:mx-sid             (mx-sid-next) ;; debug aid
              :value              unbound
-             :tiltontec.cell.base/state :nascent
+             ::cty/state         :nascent
              :pulse              nil
              :pulse-last-changed nil
              :pulse-watched      nil
@@ -53,7 +54,7 @@
              :input?             true}
             options)
      ;; type goes in meta to be consistent with model
-     :meta {:mx-type :tiltontec.cell.base/cell})))
+     :meta {:mx-type ::cty/cell})))
 
 (defn make-c-formula [& kvs]
   (let [options (c-options-canonicalize kvs +valid-formula-options+)
@@ -63,7 +64,7 @@
     (make-ref
      (merge {:value              unbound
              :mx-sid             (mx-sid-next)
-             :tiltontec.cell.base/state :nascent
+             ::cty/state         :nascent
              :pulse              nil
              :pulse-last-changed nil
              :pulse-watched      nil
@@ -76,7 +77,7 @@
              ;; not redundant: can start with rule, continue as input
              :input?             false}
             options)
-     :meta {:mx-type :tiltontec.cell.base/c-formula})))
+     :meta {:mx-type ::cty/c-formula})))
 
 ;;___________________ constructors _______________________________
 ;; I seem to have created a zillion of these, but I normally

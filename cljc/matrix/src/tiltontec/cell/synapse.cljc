@@ -29,8 +29,8 @@
                                :rule (c-fn ~@body)))]
                         (rmap-swap-prop! *depender* :synapses conj new-syn#)
                         new-syn#))
-         value# (tiltontec.cell.integrity/with-integrity ()
-                  (ensure-value-is-current synapse# :synapse *depender*))]
+         value# (tiltontec.cell.integrity/with-integrity []
+                  (ensure-value-is-current synapse#))]
      (dependency-record synapse#)
      value#))
 

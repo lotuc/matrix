@@ -1,8 +1,4 @@
 (ns tiltontec.cell.evaluate
-  #?(:cljs (:require-macros
-            [tiltontec.util.ref
-             :refer [any-ref? dosync! meta-map-set-prop! meta-map-swap-prop!
-                     ref-set! ref-swap! rmap-set-prop!]]))
   (:require
    #?(:cljs [tiltontec.cell.integrity
              :refer-macros [with-integrity]
@@ -10,9 +6,12 @@
       :clj  [tiltontec.cell.integrity :refer [c-current? c-pulse-update with-integrity]])
    #?(:cljs [tiltontec.util.trace :refer-macros [trx]]
       :clj  [tiltontec.util.trace :refer [trx]])
-   #?(:clj [tiltontec.util.ref
-            :refer [any-ref? dosync! meta-map-set-prop! meta-map-swap-prop!
-                    ref-set! ref-swap! rmap-set-prop!]])
+   #?(:clj  [tiltontec.util.ref
+             :refer [any-ref? dosync! meta-map-set-prop! meta-map-swap-prop!
+                     ref-set! ref-swap! rmap-set-prop!]]
+      :cljs [tiltontec.util.ref
+             :refer-macros [any-ref? dosync! meta-map-set-prop! meta-map-swap-prop!
+                            ref-set! ref-swap! rmap-set-prop!]])
    #?(:clj [tiltontec.util.core :refer [mx-type prog1 throw-ex]]
       :cljs [tiltontec.util.core
              :refer [mx-type throw-ex]
@@ -22,18 +21,19 @@
     :refer [*c-prop-depth* *call-stack* *causation* *custom-propagator*
             *defer-changes* *depender* *one-pulse?* *pulse* c-callers c-code$
             c-ephemeral? c-formula? c-input? c-lazy c-md-name c-me c-model
-            c-optimize c-optimized-away-value c-optimized-away? c-prop
-            c-prop-name c-pulse c-pulse-last-changed c-pulse-unwatched?
-            c-pulse-watched c-ref? c-rule c-state c-synaptic? c-useds c-valid?
-            c-value c-value-state c-warn dependency-drop dependency-record
-            mdead? unbound unlink-from-callers unlink-from-used
-            without-c-dependency]
+            c-optimize c-optimized-away? c-prop c-prop-name c-pulse
+            c-pulse-last-changed c-pulse-unwatched? c-pulse-watched c-ref?
+            c-rule c-state c-synaptic? c-useds c-valid? c-value c-value-state
+            c-warn dependency-drop dependency-record md-dead? unbound
+            unlink-from-callers unlink-from-used without-c-dependency]
     :as cty]
    [tiltontec.cell.diagnostic :refer [c-debug? cinfo minfo mxtrc mxtrc-cell]]
    [tiltontec.cell.poly :refer [c-awaken md-quiesce md-quiesce-self
                                 unchanged-test watch]]))
 
-(defn c-watch
+(defn- c-watch
+  "Do watch on cell & record the watched pulse (Checkout
+  `c-pulse-unwatched?`)."
   ([c why]
    (c-watch c unbound why))
   ([c prior-value _why]
@@ -44,7 +44,21 @@
    (when-let [cw (:watch @c)]
      (cw (c-prop c) (c-model c) (c-value c) prior-value c))))
 
-(defn ephemeral-reset [rc]
+(defn- cget-value
+  "Checkout `tiltontec.cell.base/c-value` &
+  `tiltontec.cell.base/c-optimized-away?`.
+
+  returns [value-state/:non-ref value]."
+  [c]
+  (if (c-ref? c)
+    (let [v @c]
+      (if (and (map? v) (contains? v ::cty/state))
+        [(::cty/state v) (:value v)]
+        ;; optimized away cell
+        [:optimized-away v]))
+    [:non-ref c]))
+
+(defn- ephemeral-reset [rc]
   ;; allow call on any cell, catch here
   (when (c-ephemeral? rc)
     ;;
@@ -57,18 +71,17 @@
       (when-let [me (c-model rc)]
         ;; presumption next is that model cells live in
         ;; their own internal prop of model FNYI
-        (ref-swap! me assoc (c-prop rc) nil))
+        (when-let [p (c-prop rc)]
+          (ref-swap! me assoc p nil)))
       (ref-swap! rc assoc :value nil))))
 
-(declare calculate-and-set cget-value-as-is)
+(declare calculate-and-set calculate-and-link c-value-assume)
 
 (defn ensure-value-is-current
   "The key to data integrity: recursively check the known dependency
   graph to decide if we are current, and if not kick off recalculation
   and propagation."
-
-  [c _debug-id ensurer]
-
+  [c]
   (cond
     ;; --- easy way out: our pulse is current ---------------
     (c-current? c)
@@ -84,66 +97,46 @@
     (c-value c)
 
     ;; --- above we had valid values so did not care. now... -------
-    (when-let [md (c-model c)]
-      (mdead? md))
+    (some-> (c-model c) md-dead?)
     (throw-ex "evic> model of cell is dead" {:cell c})
 
     ;; --- no more early exits  -------------------
     (or (not (c-valid? c))
         (loop [[used & urest] (seq (c-useds c))]
           (when used
-            (ensure-value-is-current used :nested c)
+            (ensure-value-is-current used)
             ;; now see if it actually changed; maybe it just got made current because no
             ;; dependency was out of date. If so, that alone does not mean we need to re-run.
             (or (when-let [last-changed (c-pulse-last-changed used)]
                   (> last-changed (c-pulse c)))
                 (recur urest)))))
-    (let [calc-val (when-not (c-current? c)
-                     ;; Q: how can it be current after above checks indicating not current?
-                     ;; A: if dependent changed during above loop over used and its watch read/updated me
-                     (mxtrc-cell c :evic-sees-uncurrent)
-                     (calculate-and-set c :evic ensurer))]
-      (mxtrc-cell c :evic-returns :calc-val calc-val)
-      (cget-value-as-is c))
+    (do (when-not (c-current? c)
+          ;; Q: how can it be current after above checks indicating not current?
+          ;; A: if dependent changed during above loop over used and its watch read/updated me
+          (calculate-and-set c))
+        (second (cget-value c)))
 
     ;; we were behind the pulse but not affected by the changes that moved the pulse
     ;; record that we are current to avoid future checking:
     :else
-    (do
-      (mxtrc-cell c :just-pulse-valid-uninfluenced)
-      (c-pulse-update c :valid-uninfluenced)
-      (c-value c))))
-
-(defn cget-value-as-is [c]
-  (if (c-ref? c)
-    (if (and (map? @c) (contains? @c ::cty/state))
-      (:value @c)
-      @c)
-    c))
+    (do (c-pulse-update c :valid-uninfluenced)
+        (c-value c))))
 
 (defn cget
   "The API for determing the value associated with a Cell.
   Ensures value is current, records any dependent, and
   notices if a standalone cell has never been watched."
   [c]
-  (if (not (c-ref? c))
-    c
+  (let [[value-state v] (cget-value c)]
     ;; opti-way goes in stages.
-    (if-some [[v] (c-optimized-away-value c)]
+    (if (#{:non-ref :optimized-away} value-state)
       v
       (prog1
        (with-integrity []
          (assert (c-ref? c) "c lost c-refness")
          (let [prior-value (c-value c)]
-           (mxtrc-cell c :cget-core :mx-type (mx-type (c-model c)))
            (prog1
-            (let [ci (cinfo c)
-                  dbg? (c-debug? c :cget)
-                  ev (ensure-value-is-current c :c-read nil)]
-              (if (c-ref? c)
-                (mxtrc-cell c :cget-post-evic-val :ensured-value ev)
-                (mxtrc-cell dbg? :cget-evic-flushed-returns :ensured-value ev :ci-was ci))
-              ev)
+            (ensure-value-is-current c)
 
             ;; this is new here, intended to awaken standalone cells JIT
             ;; /do/ might be better inside evic, or test here
@@ -157,16 +150,10 @@
        (when *depender*
          (dependency-record c))))))
 
-(declare calculate-and-link
-         c-value-assume)
-
 (defn calculate-and-set
   "Calculate, link, record, and propagate."
-  [c dbgid _dbgdata]
+  [c]
   (let [[raw-value propagation-code] (calculate-and-link c)]
-    (mxtrc-cell c :post-cnlink-sees!!!!
-                :dbgid dbgid :opti (c-optimized-away? c) :prop (c-prop c)
-                :raw-value raw-value :propagation-code propagation-code)
     ;; TODO: handling (c-async? c).
     (when-not (c-optimized-away? c)
       (assert (map? (deref c)) "calc-n-set")
@@ -176,6 +163,25 @@
       ;; as part of the opti-away processing.
       (mxtrc-cell c :not-optimized!!!!!!!!!!!)
       (c-value-assume c raw-value propagation-code))))
+
+(defn- prop-info-&-callstack
+  "Stringify cell's belonging model & prop-name & the current
+  callstack."
+  [c]
+  (let [prop (c-prop-name c)
+        code (c-code$ c)
+        md-name (c-md-name c)]
+    (str "prop '" prop "' of model '" md-name "'."
+         "\n...> formula for " prop ":\n" code
+         "\n...> full cell:\n" @c
+         "\n\n...> callstack, latest first:\n"
+         (str/join "\n"
+                   (for [cd *call-stack*
+                         :let [md-name' (c-md-name cd)
+                               prop' (c-prop-name cd)
+                               code' (c-code$ cd)]]
+                     (str "....> md-name:" md-name' " prop: " prop'
+                          "\n....>    code:" code'))))))
 
 (defn calculate-and-link
   "The name is accurate: we do no more than invoke the rule of a formula
@@ -187,50 +193,34 @@
   then unpack."
   [c]
   (when (some #{c} *call-stack*)
-    (let [prop (c-prop-name c)]
-      (c-warn "MXAPI_COMPUTE_CYCLE_DETECTED> cyclic dependency detected while computing prop '"
-              prop "' of model '" (c-md-name c) "'.\n"
-              "...> formula for " prop ":\n"
-              (c-code$ c)
-              "\n...> full cell: \n"
-              @c
-              "\n\n...> callstack, latest first: \n"
-              (str/join "\n" (mapv (fn [cd]
-                                     (str "....> md-name:" (c-md-name cd) " prop: " (c-prop-name cd)
-                                          "\n....>    code:" (c-code$ cd)))
-                                   *call-stack*)))
-      (throw-ex "MXAPI_COMPUTE_CYCLE_DETECTED> cyclic dependency detected while computing cell" {:cell c})))
+    (c-warn "MXAPI_COMPUTE_CYCLE_DETECTED> cyclic dependency detected while computing " (prop-info-&-callstack c))
+    (throw-ex "MXAPI_COMPUTE_CYCLE_DETECTED> cyclic dependency detected while computing cell" {:cell c}))
 
   (binding [*call-stack* (cons c *call-stack*)
             *depender* c
             *defer-changes* true]
     (unlink-from-used c :pre-rule-clear)
-    (assert (c-rule c) (#?(:clj format :cljs str) "No rule in %s type %s" (:prop c) (type @c)))
-    (try
-      (let [raw-value ((c-rule c) c)
-            ;; synaptic cell's raw value is wrapped within vector along with
-            ;; some metadata
-            prop-code? (and (c-synaptic? c)
-                            (vector? raw-value)
-                            (contains? (meta raw-value) :propagate))]
-        (mxtrc-cell c :cnlink-raw-val :raw-value raw-value :prop-code? prop-code?)
-        (if prop-code?
-          [(first raw-value) (:propagate (meta raw-value))]
-          [raw-value nil]))
-      (catch #?(:clj Exception :cljs js/Error) e
-        (mxtrc-cell c :cnlink-emsg :emsg (.getMessage #?(:clj Exception :cljs js/Error) e))
-        (throw e)))))
+    (let [rule (c-rule c)]
+      (assert rule (str "No rule in " (c-prop-name c) " type " (mx-type c)))
+      (try
+        (let [raw-value (rule c)]
+          ;; synaptic cell's raw value is wrapped within vector along with
+          ;; metadata indicates if the value should be propgated.
+          (if (and (c-synaptic? c)
+                   (vector? raw-value)
+                   (contains? (meta raw-value) :propagate))
+            [(first raw-value) (:propagate (meta raw-value))]
+            [raw-value nil]))
+        (catch #?(:clj Exception :cljs js/Error) e
+          (mxtrc-cell c :cnlink-emsg :emsg (.getMessage #?(:clj Exception :cljs js/Error) e))
+          (throw e))))))
 
 ;;; --- awakening ------------------------------------
 
 (defmethod c-awaken :default [c]
-  (trx :c-awaken-def!!!)
   (if (coll? c)
-    (doseq [ce c]
-      (c-awaken ce))
-    (trx :c-awaken-fall-thru (if (any-ref? c)
-                               [:ref-of (mx-type c) (meta c)]
-                               [:unref c (mx-type c) (meta c)]))))
+    (doseq [ce c] (c-awaken ce))
+    (throw (ex-info "cannot do c-awaken on cell" {:cell c}))))
 
 (defmethod c-awaken ::cty/cell [c]
   (assert (c-input? c))
@@ -248,13 +238,11 @@
    ;; hhack -- bundle this up into reusable with evic
    (binding [*depender* nil]
      (when-not (c-current? c)
-       (calculate-and-set c :fn-c-awaken nil)))))
+       (calculate-and-set c)))))
 
 ;; ------------------------------------------------------------
 
-(declare optimize-away?!
-         propagate
-         c-value-changed?)
+(declare optimize-away?! propagate c-value-changed?)
 
 (defn md-prop-value-store [me prop value]
   (assert me)
@@ -366,18 +354,9 @@
                ;; when would this not be the case? and who cares?
                (c-valid? c))
       (when (:on-quiesce @c)
-        (let [prop (c-prop-name c)]
-          (c-warn "optimize-away?!> on-quiesce detected on cell, but it will be ignored since the cell is being optimized away '"
-                  prop "' of model '" (c-md-name c) "'.\n"
-                  "...> formula for " prop ":\n"
-                  (c-code$ c)
-                  "\n...> full cell: \n"
-                  @c
-                  "\n\n...> callstack, latest first: \n"
-                  (str/join "\n" (mapv (fn [cd]
-                                         (str "....> md-name:" (c-md-name cd) " prop: " (c-prop-name cd)
-                                              "\n....>    code:" (c-code$ cd)))
-                                       *call-stack*)))))
+        (c-warn "optimize-away?!> on-quiesce detected on cell, "
+                "but it will be ignored since the cell is being optimized away "
+                (prop-info-&-callstack c)))
 
       (when (= :freeze (c-optimize c))
         (unlink-from-used c :freeze))
@@ -390,7 +369,7 @@
       ;; let callers know they need not check us for currency again
       (doseq [caller (seq (c-callers c))]
         (mxtrc-cell c :optimized-away-runs-caller :caller caller)
-        (ensure-value-is-current caller :opti-used c)
+        (ensure-value-is-current caller)
         (when-not (c-optimized-away? caller)
           (dependency-drop c caller)))
 
@@ -486,7 +465,7 @@
   (when-not (empty? callers)
     (let [causation (cons c *causation*)] ;; closed over below
       (with-integrity [:tell-dependents c]
-        (if (mdead? (c-model c))
+        (if (md-dead? (c-model c))
           (trx "WHOAA!!!! dead by time :tell-deps dispatched; bailing" c)
           (binding [*causation* causation]
             (doseq [caller (seq callers)
@@ -518,4 +497,4 @@
                     :when (or (some #{c} (c-useds caller))
                               (c-optimized-away? c))]
               (mxtrc :propagate :noti-caller (cinfo caller) :callee (cinfo c))
-              (calculate-and-set caller :propagate c))))))))
+              (calculate-and-set caller))))))))

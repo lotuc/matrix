@@ -68,7 +68,7 @@
 (defn md-dead?
   "Return true if `md-state` of `me` is `:dead`."
   [me]
-  (cb/mdead? me))
+  (cb/md-dead? me))
 
 ;;; --- cells ---------------------------------------------
 

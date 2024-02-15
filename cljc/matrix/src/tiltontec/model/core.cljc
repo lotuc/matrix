@@ -81,15 +81,17 @@
     (apply make :mx-type args)
     (dosync!
      (let [arg-map (apply hash-map args)
+           mx-type (get arg-map :mx-type ::cty/model)
            meta-keys #{:mx-type :on-quiesce}
            props-map (apply dissoc arg-map meta-keys)
+
            me (make-ref
                (->> props-map
                     (map (fn [[k v]] [k (if (c-ref? v) unbound v)]))
                     (into {:parent *parent*}))
-               :meta {:tiltontec.cell.base/state :nascent
+               :meta {::cty/state :nascent
                       :mx-sid     (mx-sid-next)
-                      :mx-type    (get arg-map :mx-type ::cty/model)
+                      :mx-type    mx-type
                       :on-quiesce (get arg-map :on-quiesce)})
            cz (->> props-map
                    (filter (fn [[prop v]] (md-install-cell me prop v)))

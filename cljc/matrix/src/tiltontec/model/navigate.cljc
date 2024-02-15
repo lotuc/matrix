@@ -7,7 +7,7 @@
       :cljs [tiltontec.util.core
              :refer [pr-code-str]
              :refer-macros [throw-ex]])
-   [tiltontec.cell.base :refer [*depender* mdead? without-c-dependency]]
+   [tiltontec.cell.base :refer [*depender* md-dead? without-c-dependency]]
    [tiltontec.cell.diagnostic :refer [minfo]]
    [tiltontec.model.accessors :refer [mget mget?]]))
 
@@ -59,7 +59,7 @@
   [what where & options]
   (assert where (str "fasc> 'where' arg is nil seeking " what :options options))
   (assert (or (not (any-ref? where))
-              (not (mdead? where)))
+              (not (md-dead? where)))
           (str "fasc> pass dead 'where' " (minfo where) :seeking what))
   (assert what (str "fasc> 'what' arg is nil searching from " (minfo where) :options options))
   (let [options (merge {:me? false :wocd? true :must? true}

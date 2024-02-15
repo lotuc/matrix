@@ -4,13 +4,11 @@
             [tiltontec.util.ref :refer [any-ref? def-rmap-props dosync! make-ref
                                         ref-swap!]]))
   (:require
-   #?(:clj [clojure.pprint :refer [pprint]]
-      :cljs [cljs.pprint :refer [pprint]])
    #?(:clj [tiltontec.util.ref
             :refer [any-ref? def-rmap-props dosync! make-ref ref-swap!]])
    #?(:clj [tiltontec.util.trace :refer [pr-warn]]
       :cljs [tiltontec.util.trace :refer-macros [pr-warn]])
-   [tiltontec.util.core :refer [mx-type?]]))
+   [tiltontec.util.core :refer [mx-type mx-type? pr-code-str]]))
 
 ;; --- the Cells beef -----------------------
 
@@ -106,9 +104,7 @@ rule to get once behavior or just when fm-traversing to find someone"
 
 (defn c-prop-name [rc] (c-prop rc))
 
-(defn c-code$ [c]
-  (with-out-str (binding [*print-level* 20]
-                  (pprint (:code @c)))))
+(defn c-code$ [c] (pr-code-str (:code @c)))
 
 (defn c-value [c]
   (assert (any-ref? c))
@@ -116,23 +112,13 @@ rule to get once behavior or just when fm-traversing to find someone"
     (:value @c)
     @c))
 
-(defn c-optimized-away? [c]
+(defn c-optimized-away?
+  "Returns if given cell ref is optimized away."
+  [c]
   (assert (c-ref? c) "c-awy?-got-not-c")
   (or (not (map? @c))
       (not (contains? @c ::state))
       (= :optimized-away (::state @c))))
-
-(defn c-optimized-away-value
-  "Return a vector wrapped value of a cell which has been optimized
-  away, or nil if it has not."
-  [c]
-  (assert (c-ref? c) "c-awy?-got-not-c")
-  (let [v @c]
-    (cond
-      ;; non-cell, which means a optimized away value.
-      (or (not (map? v)) (not (contains? v ::state))) [v]
-      ;; state indicated optimized away, extract the value
-      (= :optimized-away (::state v)) [(:value v)])))
 
 (defn c-md-name [c]
   (if-let [md (c-model c)]
@@ -178,13 +164,8 @@ rule to get once behavior or just when fm-traversing to find someone"
 
 ;; --- defmodel rizing ---------------------
 
-(defn md-ref? [x] (any-ref? x))
-
-;; hhack (mx-type? x ::model)
-
-;; --- mdead? ---
+(defn md-ref? [x] (some? (mx-type x)))
 
 (defn md-state [me] (::state (meta me)))
 
-(defn mdead? [me] (= :dead (md-state me)))
-
+(defn md-dead? [me] (= :dead (md-state me)))

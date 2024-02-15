@@ -2,11 +2,11 @@
   #?(:cljs (:require-macros
             [tiltontec.cell.integrity
              :refer [with-integrity with-cc without-integrity with-async-change]]
-            [tiltontec.util.ref :refer [ref-swap!]]))
+            [tiltontec.util.ref :refer [ref-swap! dosync!]]))
   (:require
    #?(:cljs [tiltontec.util.trace :refer-macros [trx]]
       :clj  [tiltontec.util.trace :refer [trx]])
-   #?(:clj [tiltontec.util.ref :refer [ref-swap!]])
+   #?(:clj [tiltontec.util.ref :refer [dosync! ref-swap!]])
    #?(:clj [tiltontec.util.core
             :refer [fifo-add fifo-peek fifo-pop prog1 throw-ex]]
       :cljs [tiltontec.util.core
@@ -137,7 +137,7 @@
 
 (defn call-with-integrity
   [opcode defer-info action]
-  (#?(:cljs do :clj dosync)
+  (dosync!
    (if *within-integrity*
      (if opcode
        (prog1
