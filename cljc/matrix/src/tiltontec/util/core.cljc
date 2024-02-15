@@ -18,6 +18,7 @@
 (defn set-ify [x]
   (cond
     (nil? x) #{}
+    (set? x) x
     (sequential? x) (set x)
     :else #{x}))
 

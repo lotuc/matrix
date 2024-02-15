@@ -13,9 +13,11 @@
              :refer [fifo-add fifo-peek fifo-pop throw-ex]
              :refer-macros [prog1]])
    [tiltontec.cell.base
-    :refer [*defer-changes* *dp-log* *one-pulse?* *pulse*
+    :refer [*defer-changes* *one-pulse?* *pulse*
             *unfinished-business* *within-integrity* +client-q-handler+
-            c-optimized-away? c-pulse un-stopped]]))
+            c-optimized-away? c-pulse un-stopped]]
+   #?(:clj  [tiltontec.cell.diagnostic :refer [mxtrc]]
+      :cljs [tiltontec.cell.diagnostic :refer-macros [mxtrc]])))
 
 ;; --- the pulse ------------------------------
 
@@ -23,9 +25,9 @@
   ([] (data-pulse-next :anon))
   ([pulse-info]
    (when-not *one-pulse?*
-     (when *dp-log*
-       (trx "dp-next> " (inc @*pulse*) pulse-info))
-     (ref-swap! *pulse* inc))))            ;; hhack try as commute
+     (let [p (ref-swap! *pulse* inc)]
+       (mxtrc [:data-pulse-next] :pulse p :pulse-info pulse-info)
+       p))))
 
 (defn c-current? [c]
   (when-some [p (c-pulse c)]
@@ -103,7 +105,7 @@
 
        :deferred-state-change
        (when-let [[defer-info task-fn] (ufb-pop :change)]
-         (data-pulse-next :defferred-state-chg)
+         (data-pulse-next :defferred-state-change)
          (task-fn :change defer-info)
          (recur :tell-dependents))))))
 
@@ -146,6 +148,7 @@
          ;; in the place, but if the SETF is deferred we return
          ;; something that will help someone who tries to use
          ;; the setf'ed value figure out what is going on:
+        (mxtrc [:call-with-integrity :defer] :opcode opcode :defer-info defer-info)
         (ufb-add opcode [defer-info action]))
 
        ;; thus by not supplying an opcode one can get something
@@ -161,7 +164,7 @@
                *defer-changes* false]
        (when (or (zero? @*pulse*)
                  (= opcode :change))
-         (data-pulse-next [:cwi opcode defer-info]))
+         (data-pulse-next [:call-with-integrity opcode defer-info]))
 
        (prog1
         (action opcode defer-info)

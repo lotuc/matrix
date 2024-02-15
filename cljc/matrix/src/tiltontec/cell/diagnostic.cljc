@@ -1,29 +1,23 @@
 (ns tiltontec.cell.diagnostic
   #?(:cljs
-     (:require-macros [tiltontec.cell.diagnostic :refer [mxtrc mxtrc-cell]]
+     (:require-macros [tiltontec.cell.diagnostic :refer [mxtrc]]
                       [tiltontec.util.ref :refer [any-ref?]]))
   (:require
    #?(:clj [tiltontec.util.ref :refer [any-ref?]])
    [clojure.set :as set]
    [tiltontec.cell.base
     :refer [c-async? c-md-name c-prop-name c-ref? c-value c-value-state
-            md-ref?]]
-   [tiltontec.util.core :refer [mx-type set-ify]]))
+            md-ref? *call-stack*]]
+   [tiltontec.util.core :refer [mx-type set-ify]]
+   [clojure.string :as str]))
 
-;;; a collection of tags to be traced (checkout `mxtrc` & `mxtrc-cell`)
+;;; a collection of tags to be traced (checkout `mxtrc`), or set to `:all` to
+;;; trace all tags.
 (def ^:dynamic *mx-trace* nil)
 
 ;;; a function which receives model and returns debug info of it. checkout
 ;;; `minfo` for its default.
 (def ^:dynamic *mx-minfo* nil)
-
-(defn c-debug?
-  ([c] (c-debug? c :annon))
-  ([c tag]
-   (when-let [dbg (:debug @c)]
-     (or (true? dbg)
-         (= dbg tag)
-         (and (coll? dbg) (some #{tag} dbg))))))
 
 (defn minfo [me]
   (if *mx-minfo*
@@ -42,9 +36,7 @@
     (nil? c) :NIL-C
     (not (any-ref? c)) :NOT-ANY-REF-C
     (not (c-ref? c)) :NOT-C-REF
-    :else [(c-prop-name c)
-           (c-md-name c)
-           (:mx-sid @c)
+    :else [(str (c-md-name c) "." (or (c-prop-name c) "no-prop") "." (:mx-sid @c))
            [:pulse (:pulse @c)]
            [:val-state (c-value c) (c-value-state c)]
            [:useds (count (:useds @c))
@@ -58,17 +50,18 @@
         (and (coll? in) (some #{:all} in))
         (seq (set/intersection (set-ify seek) (set-ify in))))))
 
-(defn build-trace-map [& bits]
+(defn build-trace-values [& bits]
   (assert (even? (count bits)))
   (->> (partition 2 bits)
        (map (fn [[k v]]
               (assert (keyword? k) (str "build-trace-map> key is not keyword |" k "|"))
               [k v]))
-       (into {})))
+       (apply concat)))
 
-(defn print-trace [trc-fn tag trace-map]
-  (binding [*print-level* (or *print-level* 3)]
-    (println (str trc-fn ">" tag ">") (pr-str trace-map))))
+(defn print-trace [tag trace-values]
+  (binding [*print-level* (or *print-level* 5)]
+    (println (str (str/join "" (map (constantly "  ") *call-stack*)) tag ">")
+             (pr-str trace-values))))
 
 (defmacro mxtrc
   "Prints bits if tag is in `*mx-trace*`."
@@ -76,21 +69,7 @@
   (assert (or (keyword? tag) (and (vector? tag) (every? keyword? tag)))
           (str "mxtrc> first argument must be keyword or keywords to trace, not |" tag "|"))
   `(when (match-loose ~tag *mx-trace*)
-     (print-trace :mxtrc ~tag (build-trace-map ~@bits))))
-
-(defmacro mxtrc-cell
-  "Print bits if tag is in `*mx-trace*` and `c` is true or a cell which
-  `:debug` is on."
-  [c tag & bits]
-  (assert (or (keyword? tag) (and (vector? tag) (every? keyword? tag)))
-          (str "mxtrc> first argument must be keyword or keywords to trace, not |" tag "|"))
-  `(when ~c
-     (binding [*print-level* (or *print-level* 3)]
-       (assert (or (= ~c true) (c-ref? ~c))
-               (str "mxtrc-cell> passed non c-ref? " ~tag "| " (if (any-ref? ~c) @~c ~c)))
-       (when (and (or (= ~c true) (:debug @~c))
-                  (match-loose ~tag *mx-trace*))
-         (print-trace :mxtrc-cell ~tag (build-trace-map ~@bits))))))
+     (print-trace ~tag (build-trace-values ~@bits))))
 
 (comment
   (mxtrc "not ok")
@@ -101,6 +80,4 @@
     (mxtrc :bom :msg "hi mom"))
   (binding [*mx-trace* [:boom :bom]]
     ;; vector tags
-    (mxtrc [:bom :abc] :msg "hi mom"))
-  (binding [*mx-trace* [:boom :bom]]
-    (mxtrc-cell true :boom :msg "hi mon")))
+    (mxtrc [:bom :abc] :msg "hi mom")))

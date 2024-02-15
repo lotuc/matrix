@@ -12,6 +12,7 @@
       :clj [tiltontec.cell.core :refer [c-reset! cF+ cI make-c-formula make-cell]])
    [tiltontec.cell.evaluate :refer [cget]]
    [tiltontec.cell.poly :refer [c-awaken]]
+   [tiltontec.cell.diagnostic :refer [*mx-trace*]]
    [tiltontec.matrix.api :refer [fn-watch]]))
 
 (defn prn-level-3 [f]
@@ -184,5 +185,35 @@
     (is (= :home (cget r-loc)))
     (c-reset! (:action v) :knock-knock)))
 
-#?(:cljs (do
-           (cljs.test/run-tests)))
+(comment
+  ;; test tracing messages
+  (binding [*mx-trace* :all]
+    (let [x (cI 1 :prop :x :debug true)
+          b (cF+ [:prop :b] (inc (cget x)))
+          a (cF+ [:prop :a] (* (cget x) (cget b)))
+          c (cF+ [:prop :c :optimize :when-value-t]
+                 (let [v (cget x)]
+                   (when (> v 2)
+                     v)))
+          h (cF+ [:prop :h] (when (> (cget b) 4)
+                              (cget b)
+                              (* (cget a) 2)))
+          g (cF+ [:prop :g :lazy true] (when (> (cget b) 4)
+                                         (cget b)
+                                         (* (cget a) 2)))]
+      (cget h)
+      (println "^^^^^^^^^^^^^^^^^^ (cget h)")
+      (cget a)
+      (println "^^^^^^^^^^^^^^^^^^ (cget a)")
+      (cget c)
+      (println "^^^^^^^^^^^^^^^^^^ (cget c)")
+      (cget g)
+      (println "^^^^^^^^^^^^^^^^^^ (cget g)")
+      (c-reset! x 3)
+      (println "^^^^^^^^^^^^^^^^^^ (c-reset! x 3)")
+      (cget c)
+      (println "^^^^^^^^^^^^^^^^^^ (cget c)")
+      (cget g)
+      (println "^^^^^^^^^^^^^^^^^^ (cget g)"))))
+
+#?(:cljs (do (cljs.test/run-tests)))

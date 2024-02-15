@@ -22,8 +22,6 @@
 (def ^:dynamic *one-pulse?* false)
 (def ^:dynamic *custom-propagator* nil)
 
-(def ^:dynamic *dp-log* false)
-
 (def ^:dynamic *causation* '())
 (def ^:dynamic *call-stack* nil)
 (def ^:dynamic *depender*
