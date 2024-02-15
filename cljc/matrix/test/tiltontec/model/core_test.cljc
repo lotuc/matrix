@@ -37,7 +37,7 @@
   (with-mx
     (let [u (make
              :kon (cI false :prop :kon)
-             :kids (cF                                     ;;(trx :kids-run! *depender*)
+             :kids (cF
                     (when (mget me :kon)
                       (vector
                        (make

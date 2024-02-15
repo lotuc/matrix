@@ -28,12 +28,22 @@
             c-pulse-unwatched? c-pulse-watched c-ref? c-rule c-state
             c-synaptic? c-unbound? c-useds c-valid? c-value c-value-state
             c-warn dependency-drop dependency-record md-prop-owning? mdead?
-            unlink-from-callers unlink-from-used without-c-dependency]
+            unlink-from-callers unlink-from-used without-c-dependency unbound]
     :as cty]
    [tiltontec.cell.diagnostic :refer [c-debug? cinfo minfo mxtrc mxtrc-cell]]
    [tiltontec.cell.poly :refer [c-awaken md-quiesce md-quiesce-self
-                                unchanged-test]]
-   [tiltontec.cell.watch :refer [c-watch]]))
+                                unchanged-test watch]]))
+
+(defn c-watch
+  ([c why]
+   (c-watch c unbound why))
+  ([c prior-value _why]
+   (assert (c-ref? c))
+   (assert (integer? @*pulse*))
+   (rmap-set-prop! c :pulse-watched @*pulse*)
+   (watch (c-prop c) (c-model c) (c-value c) prior-value c)
+   (when-let [cw (:watch @c)]
+     (cw (c-prop c) (c-model c) (c-value c) prior-value c))))
 
 (defn ephemeral-reset [rc]
   ;; allow call on any cell, catch here

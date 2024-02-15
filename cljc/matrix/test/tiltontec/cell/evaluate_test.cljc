@@ -7,21 +7,22 @@
    #?(:cljs [tiltontec.util.trace :refer-macros [trx] :refer [*trx?*]]
       :clj  [tiltontec.util.trace :refer [*trx?* trx]])
    #?(:clj  [tiltontec.util.ref :refer [dosync!]])
-   #?(:clj  [tiltontec.cell.base
-             :refer [c-callers c-input? c-model c-prop c-prop-name c-props
-                     c-useds c-valid? c-value-state] :as cty]
-      :cljs [tiltontec.cell.base
-             :refer [c-callers c-input? c-model c-prop c-prop-name c-props
-                     c-useds c-valid? c-value-state] :as cty])
    #?(:cljs [tiltontec.cell.core
              :refer-macros [cF cF+ with-mx]
              :refer [c-reset! cI]]
       :clj  [tiltontec.cell.core :refer [c-reset! cF cF+ cI with-mx]])
+   [tiltontec.cell.base
+    :refer [c-callers c-input? c-model c-prop c-prop-name c-ref? c-useds
+            c-valid? c-value-state] :as cty]
    [tiltontec.cell.evaluate :refer [cget]]
    [tiltontec.matrix.api :refer [fn-watch]]
    [tiltontec.util.core :refer [mx-type?]]))
 
 #?(:cljs (set! *print-level* 3))
+
+(defn c-props [c k]
+  (assert (c-ref? c))
+  (set (map c-prop (k @c))))
 
 (deftest test-input
   (with-mx

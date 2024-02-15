@@ -22,11 +22,6 @@
     `(instance? cljs.core.Atom ~x)
     `(instance? clojure.lang.Ref ~x)))
 
-(defmacro any-ref1? [x]
-  (if (:ns &env)
-    `(instance? cljs.core.Atom ~x)
-    `(instance? clojure.lang.Ref ~x)))
-
 (defmacro ref-swap! [ref f & args]
   (if (:ns &env)
     `(swap! ~ref ~f ~@args)

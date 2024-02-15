@@ -1,12 +1,8 @@
 (ns tiltontec.model.accessors
-  #?(:cljs (:require-macros
-            [tiltontec.util.ref :refer [any-ref?]]))
   (:require
-   #?(:clj  [tiltontec.util.ref :refer [any-ref?]])
    #?(:clj  [tiltontec.cell.core :refer [c-reset!]]
       :cljs [tiltontec.cell.core :refer [c-reset!]])
-   [tiltontec.cell.base :refer [c-warn]]
-   [tiltontec.cell.diagnostic :refer [cinfo mxtrc-cell]]
+   [tiltontec.cell.base :refer [c-warn md-ref?]]
    [tiltontec.cell.evaluate :refer [cget]]
    [tiltontec.util.core :refer [mx-type throw-ex]]))
 
@@ -20,12 +16,10 @@
    (mget? me prop nil))
   ([me prop alt-val]
    (assert me (str "mget passed nil for me accessing prop: " prop))
-   (assert (any-ref? me) (str "mget passed non-model for me accessing prop: " prop ": " me))
+   (assert (md-ref? me) (str "mget passed non-model for me accessing prop: " prop ": " me))
    (if (contains? @me prop)
      (if-let [c (md-cell me prop)]
-       (do
-         (mxtrc-cell c :mget-sees-c? :model me :prop prop :cinfo (cinfo (md-cell me prop)))
-         (cget c))
+       (cget c)
        (prop @me))
      alt-val)))
 
@@ -33,14 +27,16 @@
   (let [v (mget? me prop no-such-prop)]
     (when (= v no-such-prop)
       (c-warn
-       "MXAPI_ILLEGAL_GET_NO_SUCH_prop> mget was attempted on non-existent prop \"" prop "\"."
-       "\n...> FYI: known props are" (keys @me)
+       "MXAPI_ILLEGAL_GET_NO_SUCH_PROP> mget was attempted on non-existent prop \"" prop "\"."
+       "\n...> FYI: known props are: " (keys @me)
        "\n...> FYI: use mget? if prop might not exist.")
-      (throw-ex "MXAPI_ILLEGAL_GET_NO_SUCH_prop> mget was attempted on non-existent prop" {:model me :prop prop}))
+      (throw-ex "MXAPI_ILLEGAL_GET_NO_SUCH_PROP> mget was attempted on non-existent prop" {:model me :prop prop}))
     v))
 
 (defn mset! [me prop new-value]
-  (assert me)
+  (assert me (str "mset! passed nil for me accessing prop: " prop))
+  (assert (md-ref? me) (str "mset! passed non-model for me setting prop: " prop ": " me))
+
   (if-let [c (md-cell me prop)]
     (c-reset! c new-value)
     (throw-ex
@@ -55,7 +51,7 @@
             "...> FYI: instance meta is " (meta me) "\n.")
            "MXAPI_ILLEGAL_MUTATE_NONCELL> invalid mswap!/mset!/mset! to the property which is not mediated by any cell")
        (do (c-warn "MXAPI_ILLEGAL_MUTATE_NO_SUCH_prop> mswap!/mset!/mset! was attempted to non-existent prop \"" prop "\".\n"
-                   "...> FYI: known props are" (keys @me))
+                   "...> FYI: known props are: " (keys @me))
            "MXAPI_ILLEGAL_MUTATE_NO_SUCH_prop> mswap!/mset!/mset! was attempted to non-existent prop"))
      {:model me :prop :prop :new-value new-value})))
 

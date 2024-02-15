@@ -178,12 +178,6 @@ rule to get once behavior or just when fm-traversing to find someone"
   (doseq [used (c-useds caller)]
     (dependency-drop used caller)))
 
-;; debug aids --------------
-
-(defn c-props [c k]
-  (assert (c-ref? c))
-  (set (map c-prop (k @c))))
-
 ;; --- defmodel rizing ---------------------
 
 (defn md-ref? [x] (any-ref? x))

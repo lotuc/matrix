@@ -4,13 +4,11 @@
       :cljs [cljs.test :refer-macros [deftest is]])
    #?(:cljs [tiltontec.util.trace :refer-macros [trx]]
       :clj  [tiltontec.util.trace :refer [trx]])
-   #?(:clj [tiltontec.cell.base :refer [c-callers c-useds cells-init unbound] :as cty]
-      :cljs [tiltontec.cell.base
-             :refer [c-callers c-useds cells-init unbound] :as cty])
    #?(:cljs [tiltontec.cell.core
              :refer-macros [cF+ c_F cF_]
              :refer [c-reset! cI]]
       :clj [tiltontec.cell.core :refer [c-reset! c_F cF+ cF_ cI]])
+   [tiltontec.cell.base :refer [c-callers c-useds cells-init unbound]]
    [tiltontec.cell.evaluate :refer [cget]]
    [tiltontec.matrix.api :refer [fn-watch]]))
 

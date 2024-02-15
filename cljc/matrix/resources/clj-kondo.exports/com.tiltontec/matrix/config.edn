@@ -33,7 +33,6 @@
                                                       tiltontec.cell.integrity
                                                       tiltontec.cell.poly
                                                       tiltontec.cell.synapse
-                                                      tiltontec.cell.watch
                                                       tiltontec.matrix.api
                                                       tiltontec.model.accessors
                                                       tiltontec.model.core

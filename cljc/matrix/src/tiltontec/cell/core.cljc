@@ -94,9 +94,6 @@
 (defmacro c-fn [& body]
   `(c-fn-var (~'prop-c#) ~@body))
 
-(defmacro c-fn-ex [& body]
-  `(c-fn-var (~'prop-c#) ~@body))
-
 (defmacro cF [& body]
   `(make-c-formula
     :code '~body

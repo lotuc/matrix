@@ -4,10 +4,8 @@
              :refer [with-mx without-c-dependency cf-freeze the-kids cFkids with-par
                      fn-watch cF cF+ cFn cF+n cFonce cF1 with-cc mpar fmu mdv!
                      with-mx-trace with-minfo with-minfo-std
-                     mxtrc with-integrity]]
-            [tiltontec.util.ref :refer [any-ref1?]]))
+                     mxtrc with-integrity]]))
   (:require
-   #?(:clj [tiltontec.util.ref :refer [any-ref1?]])
    [tiltontec.cell.base :as cb]
    [tiltontec.cell.core]
    [tiltontec.cell.diagnostic :as diag]
@@ -15,16 +13,9 @@
    [tiltontec.model.core :as md]
    [tiltontec.model.family :as mf]
    [tiltontec.model.navigate :as mn]
-   [tiltontec.util.core :as ucore]
-   [tiltontec.util.trace :as utrace]))
-
-(defn prx [tag & bits] (apply utrace/prx tag bits))
-
-(defn any-ref? [it] (any-ref1? it))
+   [tiltontec.util.core :as ucore]))
 
 (def unbound cb/unbound)
-
-;;; --- the matrix --------------------------------------------
 
 (def matrix
   "Optionally populated with the root of a tree of Models."
@@ -34,43 +25,93 @@
   `(tiltontec.cell.core/call-with-mx
     (fn [] ~@body)))
 
-;;;
-(defn md-name [me] (:name @me))
-(defn mname [me] (:name @me))
-(defn mx-type [it] (ucore/mx-type it))
-(defn md-state [it] (cb/md-state it))
-(defn md-ref? [it] (cb/md-ref? it))
-(defn md-dead? [it] (cb/mdead? it))
+(defn mx-type
+  "Return the type of the matrix reference `me`.
 
-;;;--- cells ------------------------------------------
+  A cell reference's type could be
+  - `:tiltontec.cell.base/cell`
+  - `:tiltontec.cell.base/c-formula` (which derives the `:tiltontec.cell.base/cell`)
 
-;;;;;; --- cell accessors ------------------------------------------
+  A model's reference type is given by `make`'s `mx-type` option
+  - defaults to be `:tiltontec.cell.base/model`"
+  [it]
+  (ucore/mx-type it))
 
-(defn c-value [c] (cb/c-value c))
-(defn c-model [c] (cb/c-model c))
-(defn c-prop-name [c] (cb/c-prop-name c))
+(defn mx-type?
+  "Return true if `it`'s type (as returned by `mx-type`) is
+  `type` (check with `isa?`)."
+  [it type]
+  (ucore/mx-type? it type))
 
-;;; --- cell formula utilities ----------------------------------
+(defn md-ref?
+  "Return true if `me` is a model (reference)."
+  [me]
+  (cb/md-ref? me))
 
-(defmacro without-c-dependency [& body]
+(defn md-name
+  "Return the name of the model `me`."
+  [me]
+  (:name @me))
+
+(defn md-state
+  "Return the state of the model `me`.
+
+  The state can be one of the following
+  - :nascent
+  - :awakening
+  - :awake
+  - :optimized-away
+  - :dead"
+  [me]
+  (cb/md-state me))
+
+(defn md-dead?
+  "Return true if `md-state` of `me` is `:dead`."
+  [me]
+  (cb/mdead? me))
+
+;;; --- cells ---------------------------------------------
+
+;;; cells can be standalone (not in a model) or in a model.
+
+(defn c-value
+  "Return the value of the cell `c`."
+  [c]
+  (cb/c-value c))
+
+(defn c-model
+  "Return the model of the cell `c` (possibly `nil`)."
+  [c]
+  (cb/c-model c))
+
+(defn c-prop-name
+  "Return the name of the property (of the cell model) of the cell
+  `c` (possibly `nil`)."
+  [c]
+  (cb/c-prop-name c))
+
+(defmacro without-c-dependency
+  "Macro to execute `body` without establishing cell dependency."
+  [& body]
   `(tiltontec.cell.base/without-c-dependency ~@body))
 
 (defmacro cf-freeze
   "Stop listening to dependents.
+
   Return the specified optional value, or the current latest value."
   [& [value-form]]
   `(tiltontec.cell.core/cf-freeze ~value-form))
 
-;;; --- models ---------------------------------------
-
-(defmacro def-mget [reader-prefix & props]
+(defmacro def-mget
+  "Define a reader function for a model's property."
+  [reader-prefix & props]
   `(tiltontec.model.accessors/def-mget ~reader-prefix ~@props))
 
 ;;; --- parent/kids ---------------------------------------------
 
 (defmacro the-kids
-  "Macro to flatten kids in `tree` and relate them to `me` via the *parent*
-  dynamic binding"
+  "Macro to flatten kids in `tree` and relate them to `me` via the
+  `tiltontec.model.core/*parent*` dynamic binding"
   [& tree]
   `(tiltontec.model.family/the-kids ~@tree))
 
@@ -80,7 +121,8 @@
   `(tiltontec.model.family/cFkids ~@tree))
 
 (defmacro with-par
-  "Macro to bind *parent* to model `m` in `body`."
+  "Macro to bind `tiltontec.model.core/*parent*` to model `m` in
+  `body`."
   [m & body]
   `(tiltontec.model.core/with-par ~m ~@body))
 
@@ -122,62 +164,103 @@
 
 ;;; --- cell factories -----------------------------------------
 
-(defn cI [value & option-kvs]
+(defn cI
+  "Create a `Input` cell with the given initial `value` and cell options."
+  [value & options]
   (apply tiltontec.cell.core/make-cell
     :value value
     :input? true
-    option-kvs))
+    options))
 
-(defmacro cF [& body]
+(defmacro cF
+  "Create a `Formula` cell with formula `body`.
+
+  the `body` will be executed with following symbol bound:
+  - `me`: the cell's associated model (`c-model`)
+  - `_prop-name`: the cell's property name (`c-prop-name`)
+  - `_cache`: the cell's current value (`c-value`)
+  - `_cell`: the cell itself"
+  [& body]
   `(tiltontec.cell.core/make-c-formula
     :code '~body
     :rule (tiltontec.cell.core/c-fn ~@body)))
 
-(defmacro cF+ [[& options] & body]
+(defmacro cF+
+  "A version `cF` that takes extra cell options."
+  [[& options] & body]
   `(tiltontec.cell.core/make-c-formula
     ~@options
     :code '~body
     :rule (tiltontec.cell.core/c-fn ~@body)))
 
-(defmacro cFn [& body]
+(defmacro cFn
+  "Start as formula for initial value computation, then convert to input cell."
+  [& body]
   `(tiltontec.cell.core/make-c-formula
     :code '(tiltontec.cell.base/without-c-dependency ~@body)
     :input? true
     :rule (tiltontec.cell.core/c-fn (tiltontec.cell.base/without-c-dependency ~@body))))
 
-(defmacro cF+n [[& options] & body]
+(defmacro cF+n
+  "A version `cFn` that takes extra cell options."
+  [[& options] & body]
   `(tiltontec.cell.core/make-c-formula
     ~@options
     :code '(tiltontec.cell.base/without-c-dependency ~@body)
     :input? true
     :rule (tiltontec.cell.core/c-fn (tiltontec.cell.base/without-c-dependency ~@body))))
 
-(defmacro cFonce [& body]
+(defmacro cFonce
+  "Start as formula for initial computation, then behave as immutable property."
+  [& body]
   `(tiltontec.cell.core/make-c-formula
     :code '(tiltontec.cell.base/without-c-dependency ~@body)
     :input? nil
     :rule (tiltontec.cell.core/c-fn (tiltontec.cell.base/without-c-dependency ~@body))))
 
-(defmacro cF1 [& body]
+(defmacro cF1
+  "Alias to `cFonce`."
+  [& body]
   `(tiltontec.cell.core/cFonce ~@body))
 
 ;;; --- model factory ----------------------------------------
 
-(defn make [& arg-list]
+(defn make
+  "Create a model whose parent is `tiltontec.model.core/*parent*`.
+
+  When `arg-list` is odd, convert the first element to value of `:mx-type`.
+
+  - `:mx-type` is the type of the model, defaulting to `:tiltontec.cell.base/model`.
+  - `:on-quiesce` is a function to be called when the model quiesces.
+  - The rest of the elements are treated as key-value pairs to be used
+  as properties of the model."
+  [& arg-list]
   (apply tiltontec.model.core/make arg-list))
 
 ;;; --- mutation -----------------------------------
 
-(defn mset! [me prop new-value]
+(defn mset!
+  "Set the `prop`'s value of model `me` to be `new-value`. Returns the
+  new-value."
+  [me prop new-value]
   (ma/mset! me prop new-value))
 
-(defn mswap! [me prop swap-fn & swap-fn-args]
+(defn mswap!
+  "Swaps the `prop`'s value of model `me` to be
+  (apply swap-fn current-value-of-prop args)."
+  [me prop swap-fn & swap-fn-args]
   (apply ma/mswap! me prop swap-fn swap-fn-args))
 
-(defn mget [me prop]
+(defn mget
+  "Get the `prop`'s value of model `me`. Throw exception if no `prop`
+  found in model `me`."
+  [me prop]
   (ma/mget me prop))
 
-(defn mget? [me prop & [alt-value]]
+(defn mget?
+  "Get the `prop`'s value of model `me`. Returns `alt-value` if no
+  `prop` found in model `me`."
+  [me prop & [alt-value]]
   (ma/mget? me prop alt-value))
 
 ;;; --- integrity ---------------------------------
@@ -186,7 +269,8 @@
   `(tiltontec.cell.integrity/with-integrity [~opcode ~info]
      ~@body))
 
-(defmacro with-cc [id & body]
+(defmacro with-cc
+  [id & body]
   `(tiltontec.cell.integrity/with-integrity [:change ~id]
      ~@body))
 
@@ -246,9 +330,6 @@
 (defmacro with-minfo [minfo-body & body]
   `(binding [diag/*mx-minfo* (fn [~'me] ~minfo-body)]
      ~@body))
-
-(defmacro as-ignored [expr]
-  (list 'do (symbol "#_") expr))
 
 (defmacro with-minfo-std [& body]
   `(binding [diag/*mx-minfo* nil]
