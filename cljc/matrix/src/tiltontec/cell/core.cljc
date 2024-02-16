@@ -220,9 +220,10 @@
        "MXAPI_UNDEFERRED_CHANGE> undeferred mswap!/mset!/mset! to the property '" prop "' by an watch detected."
        "...> such mutations must be wrapped by WITH-INTEGRITY, must conveniently with macro WITH-CC."
        "...> look for MXAPI_UNDEFERRED_CHANGE in the Errors documentation for  more details.\n"
-       "...> FYI: intended new value is [" new-value "]; current value is [" (get @me prop :no-such-prop) "].\n"
+       "...> FYI: intended new value is [" new-value "];\n"
        (when me
          (str
+          "...> FYI: current value is [" (get @me prop :no-such-prop) "].\n"
           "...> FYI: instance is of type " (mx-type me) ".\n"
           "...> FYI: full instance is " @me "\n"
           "...> FYI: instance meta is " (meta me) "\n.")))
