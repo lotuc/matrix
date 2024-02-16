@@ -7,6 +7,9 @@
       :cljs [cljs.pprint :refer [pprint]])
    #?(:clj [tiltontec.util.ref :refer [make-ref ref-swap!]])))
 
+#?(:clj (set! *warn-on-reflection* true)
+   :cljs (set! *warn-on-infer* true))
+
 (defn mx-type [it]
   (or (when-let [m (meta it)]
         (:mx-type m))

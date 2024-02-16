@@ -10,6 +10,9 @@
       :cljs [tiltontec.util.trace :refer-macros [pr-warn]])
    [tiltontec.util.core :refer [mx-type mx-type? pr-code-str]]))
 
+#?(:clj (set! *warn-on-reflection* true)
+   :cljs (set! *warn-on-infer* true))
+
 ;; --- the Cells beef -----------------------
 
 (defn pulse-initial [] (make-ref 0))
@@ -65,7 +68,7 @@ rule to get once behavior or just when fm-traversing to find someone"
 (defn cells-reset
   ([] (cells-reset {}))
   ([options]
-   (reset! *pulse* 0)
+   (cells-init)
    (reset! +client-q-handler+ (:client-queue-handler options))))
 
 (defmacro without-c-dependency [& body]

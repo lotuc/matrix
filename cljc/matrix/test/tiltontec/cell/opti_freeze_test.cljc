@@ -8,8 +8,8 @@
       :cljs [tiltontec.cell.base
              :refer [c-callers c-optimized-away? c-useds pulse-now] :as cty])
    #?(:cljs [tiltontec.cell.core
-             :refer-macros [cF cF+ c-swap! cf-freeze with-mx]
-             :refer [c-reset! cI]]
+             :refer-macros [cF cF+ cf-freeze with-mx]
+             :refer [c-reset! c-swap! cI]]
       :clj  [tiltontec.cell.core :refer [c-reset! c-swap! cF cF+ cf-freeze cI with-mx]])
    #?(:clj [tiltontec.util.ref :refer [dosync!]])
    [tiltontec.cell.evaluate :refer [c-quiesce cget]]))

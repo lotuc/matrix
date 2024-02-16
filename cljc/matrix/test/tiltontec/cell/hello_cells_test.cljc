@@ -10,9 +10,9 @@
    #?(:cljs [tiltontec.cell.core :refer-macros [cF+]
              :refer [c-reset! cI make-c-formula make-cell]]
       :clj [tiltontec.cell.core :refer [c-reset! cF+ cI make-c-formula make-cell]])
+   [tiltontec.cell.diagnostic :refer [*mx-trace*]]
    [tiltontec.cell.evaluate :refer [cget]]
    [tiltontec.cell.poly :refer [c-awaken]]
-   [tiltontec.cell.diagnostic :refer [*mx-trace*]]
    [tiltontec.matrix.api :refer [fn-watch]]))
 
 (defn prn-level-3 [f]

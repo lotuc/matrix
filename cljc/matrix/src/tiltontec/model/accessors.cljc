@@ -6,6 +6,9 @@
    [tiltontec.cell.evaluate :refer [cget]]
    [tiltontec.util.core :refer [mx-type throw-ex]]))
 
+#?(:clj (set! *warn-on-reflection* true)
+   :cljs (set! *warn-on-infer* true))
+
 (defn- md-cell [me prop]
   (prop (:cz (meta me))))
 

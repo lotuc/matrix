@@ -15,6 +15,9 @@
    [tiltontec.model.navigate :as mn]
    [tiltontec.util.core :as ucore]))
 
+#?(:clj (set! *warn-on-reflection* true)
+   :cljs (set! *warn-on-infer* true))
+
 (def unbound cb/unbound)
 
 (def matrix

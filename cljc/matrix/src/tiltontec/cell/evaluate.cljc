@@ -31,6 +31,9 @@
    [tiltontec.cell.poly :refer [c-awaken md-quiesce md-quiesce-self
                                 unchanged-test watch]]))
 
+#?(:clj (set! *warn-on-reflection* true)
+   :cljs (set! *warn-on-infer* true))
+
 (defn- c-watch
   "Do watch on cell & record the watched pulse (Checkout
   `c-pulse-unwatched?`)."
@@ -218,7 +221,8 @@
             [raw-value nil]))
         (catch #?(:clj Exception :cljs js/Error) e
           (mxtrc [:calculate-and-link :emsg]
-                 :cinfo (cinfo c) :emsg (.getMessage #?(:clj Exception :cljs js/Error) e))
+                 :cinfo (cinfo c)
+                 :emsg #?(:clj (.getMessage e) :cljs (.message e)))
           (throw e))))))
 
 ;;; --- awakening ------------------------------------

@@ -5,11 +5,14 @@
   (:require
    #?(:clj [tiltontec.util.ref :refer [any-ref?]])
    [clojure.set :as set]
+   [clojure.string :as str]
    [tiltontec.cell.base
-    :refer [c-async? c-md-name c-prop-name c-ref? c-value c-value-state
-            md-ref? *call-stack*]]
-   [tiltontec.util.core :refer [mx-type set-ify]]
-   [clojure.string :as str]))
+    :refer [*call-stack* c-async? c-md-name c-prop-name c-ref? c-value
+            c-value-state md-ref?]]
+   [tiltontec.util.core :refer [mx-type set-ify]]))
+
+#?(:clj (set! *warn-on-reflection* true)
+   :cljs (set! *warn-on-infer* true))
 
 ;;; a collection of tags to be traced (checkout `mxtrc`), or set to `:all` to
 ;;; trace all tags.

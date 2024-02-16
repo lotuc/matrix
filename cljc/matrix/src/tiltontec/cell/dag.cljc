@@ -3,6 +3,9 @@
    [clojure.string :as str]
    [tiltontec.cell.base :refer [c-callers c-md-name c-prop-name c-useds]]))
 
+#?(:clj (set! *warn-on-reflection* true)
+   :cljs (set! *warn-on-infer* true))
+
 ;;; --- dag dump utility ----------------------------------------
 
 (def ^:dynamic *dag-depth*

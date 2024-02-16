@@ -9,6 +9,9 @@
    [tiltontec.cell.evaluate :refer [ensure-value-is-current]]
    [tiltontec.cell.integrity]))
 
+#?(:clj (set! *warn-on-reflection* true)
+   :cljs (set! *warn-on-infer* true))
+
 (defn existing-syn [synapse-id]
   (assert (keyword? synapse-id) "Synapse ID must be a keyword")
   (assert *depender* (str "You attempted to create synapse " synapse-id " outside a Cell formula. Synapses serve containing Cells."))

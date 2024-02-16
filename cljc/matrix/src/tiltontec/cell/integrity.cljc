@@ -12,12 +12,15 @@
       :cljs [tiltontec.util.core
              :refer [fifo-add fifo-peek fifo-pop throw-ex]
              :refer-macros [prog1]])
-   [tiltontec.cell.base
-    :refer [*defer-changes* *one-pulse?* *pulse*
-            *unfinished-business* *within-integrity* +client-q-handler+
-            c-optimized-away? c-pulse un-stopped]]
    #?(:clj  [tiltontec.cell.diagnostic :refer [mxtrc]]
-      :cljs [tiltontec.cell.diagnostic :refer-macros [mxtrc]])))
+      :cljs [tiltontec.cell.diagnostic :refer-macros [mxtrc]])
+   [tiltontec.cell.base
+    :refer [*defer-changes* *one-pulse?* *pulse* *unfinished-business*
+            *within-integrity* +client-q-handler+ c-optimized-away? c-pulse
+            un-stopped]]))
+
+#?(:clj (set! *warn-on-reflection* true)
+   :cljs (set! *warn-on-infer* true))
 
 ;; --- the pulse ------------------------------
 

@@ -16,6 +16,9 @@
    [tiltontec.util.core :refer [mx-type throw-ex]]
    [tiltontec.util.trace :refer [mx-sid-next]]))
 
+#?(:clj (set! *warn-on-reflection* true)
+   :cljs (set! *warn-on-infer* true))
+
 ; todo: stand-alone cells with watchs should be watched when they are made
 
 (def +valid-input-options+

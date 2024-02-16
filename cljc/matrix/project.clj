@@ -32,8 +32,7 @@
                               :mxtest {:source-paths ["src" "test"]
                                        :compiler     {:output-to     "resources/public/js/main-test.js"
                                                       :optimizations :whitespace
-                                                      :pretty-print  true}}
-                              }
+                                                      :pretty-print  true}}}
               :test-commands {"unit" ["phantomjs"
                                       "resources/test/phantom/runner.js"
                                       "resources/test/test.html"]}})

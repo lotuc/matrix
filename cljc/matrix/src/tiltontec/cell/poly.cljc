@@ -3,6 +3,9 @@
   (:require
    [tiltontec.util.core :refer [mx-type]]))
 
+#?(:clj (set! *warn-on-reflection* true)
+   :cljs (set! *warn-on-infer* true))
+
 ;;; --- life cycle -------------------
 
 (defmulti c-awaken

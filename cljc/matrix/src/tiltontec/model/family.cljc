@@ -11,6 +11,9 @@
    [tiltontec.model.accessors :refer [mget]]
    [tiltontec.model.core :refer [*parent*]]))
 
+#?(:clj (set! *warn-on-reflection* true)
+   :cljs (set! *warn-on-infer* true))
+
 (defn md-kids [me] (mget me :kids))
 
 (defn fm-kids-watch [me newk oldk _c]

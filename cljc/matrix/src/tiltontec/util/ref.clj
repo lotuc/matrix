@@ -1,5 +1,7 @@
 (ns tiltontec.util.ref)
 
+(set! *warn-on-reflection* true)
+
 ;; --- refs with maps conveniences -------------------
 
 (defmacro dosync! [& body]

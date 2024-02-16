@@ -12,6 +12,9 @@
    [tiltontec.cell.poly :refer [c-awaken md-awaken-before watch]]
    [tiltontec.util.trace :refer [mx-sid-next]]))
 
+#?(:clj (set! *warn-on-reflection* true)
+   :cljs (set! *warn-on-infer* true))
+
 (def matrix
   "Each app will populate this with the root of its application matrix."
   (atom nil))

@@ -11,6 +11,9 @@
    [tiltontec.cell.diagnostic :refer [minfo]]
    [tiltontec.model.accessors :refer [mget mget?]]))
 
+#?(:clj (set! *warn-on-reflection* true)
+   :cljs (set! *warn-on-infer* true))
+
 (defn nextsib [mx]
   (without-c-dependency
    (loop [sibs (mget? (:parent @mx) :kids)]

@@ -3,6 +3,9 @@
   #?(:clj (:require
            [clojure.string :as str])))
 
+#?(:clj (set! *warn-on-reflection* true)
+   :cljs (set! *warn-on-infer* true))
+
 ;;; debug & trace related utilities
 
 #?(:cljs (enable-console-print!))
