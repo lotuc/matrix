@@ -15,7 +15,7 @@
              :refer-macros [cF cF+ c-reset-next! with-mx]
              :refer [c-reset! cI cset!]]
       :clj  [tiltontec.cell.core :refer [c-reset! c-reset-next! cF cF+ cI cset! with-mx]])
-   [tiltontec.cell.evaluate :refer [cget cget]]
+   [tiltontec.cell.evaluate :refer [cget]]
    [tiltontec.matrix.api :refer [fn-watch]]))
 
 (defn prn-level-3 [f]

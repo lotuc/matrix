@@ -20,8 +20,10 @@
 (def ^:dynamic *pulse* (pulse-initial))
 (def +client-q-handler+ (atom nil))
 
-;;; seems to be a debug related falg, when true, propagate values using
-;;; *custom-propagator* (when not set, no propagate is done).
+;;; When true, propagate values to dependents using *custom-propagator* (when
+;;; not set, no propagate is done).
+;;; TODO: seems to be related to a undone feature:
+;;; https://clojurians.slack.com/archives/CKCBP3QF9/p1677633024089579?thread_ts=1677614613.185429&cid=CKCBP3QF9
 (def ^:dynamic *one-pulse?* false)
 (def ^:dynamic *custom-propagator* nil)
 
@@ -112,6 +114,13 @@ rule to get once behavior or just when fm-traversing to find someone"
   (if (and (c-ref? c) (map? @c))
     (:value @c)
     @c))
+
+(defn c-lazy-but-not-until-asked?
+  "These kinds of lazy cells should skip propagation.
+
+  `:until-asked` behaves differently."
+  [c]
+  (some #{(c-lazy c)} [:once-asked :always true]))
 
 (defn c-optimized-away?
   "Returns if given cell ref is optimized away."

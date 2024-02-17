@@ -4,13 +4,12 @@
              :refer-macros [with-integrity]
              :refer [c-current? c-pulse-update]]
       :clj  [tiltontec.cell.integrity :refer [c-current? c-pulse-update with-integrity]])
-   #?(:cljs [tiltontec.util.trace :refer-macros [trx]]
-      :clj  [tiltontec.util.trace :refer [trx]])
+   #?(:cljs :clj)
    #?(:clj  [tiltontec.util.ref
-             :refer [any-ref? dosync! meta-map-set-prop! meta-map-swap-prop!
-                     ref-set! ref-swap! rmap-set-prop!]]
+             :refer [dosync! meta-map-set-prop! meta-map-swap-prop! ref-set!
+                     ref-swap! rmap-set-prop!]]
       :cljs [tiltontec.util.ref
-             :refer-macros [any-ref? dosync! meta-map-set-prop! meta-map-swap-prop!
+             :refer-macros [dosync! meta-map-set-prop! meta-map-swap-prop!
                             ref-set! ref-swap! rmap-set-prop!]])
    #?(:clj [tiltontec.util.core :refer [mx-type prog1 throw-ex]]
       :cljs [tiltontec.util.core
@@ -20,16 +19,35 @@
    [tiltontec.cell.base
     :refer [*c-prop-depth* *call-stack* *causation* *custom-propagator*
             *defer-changes* *depender* *one-pulse?* *pulse* c-callers c-code$
-            c-ephemeral? c-formula? c-input? c-lazy c-md-name c-me c-model
-            c-optimize c-optimized-away? c-prop c-prop-name c-pulse
-            c-pulse-last-changed c-pulse-unwatched? c-pulse-watched c-ref?
-            c-rule c-state c-synaptic? c-useds c-valid? c-value c-value-state
-            c-warn dependency-drop dependency-record md-dead? unbound
-            unlink-from-callers unlink-from-used without-c-dependency]
+            c-ephemeral? c-formula? c-input? c-lazy-but-not-until-asked?
+            c-md-name c-me c-model c-optimize c-optimized-away? c-prop
+            c-prop-name c-pulse c-pulse-last-changed c-pulse-unwatched?
+            c-pulse-watched c-ref? c-rule c-state c-synaptic? c-useds c-valid?
+            c-value c-value-state c-warn dependency-drop dependency-record
+            md-dead? unbound unlink-from-callers unlink-from-used
+            without-c-dependency]
     :as cty]
    [tiltontec.cell.diagnostic :refer [cinfo minfo mxtrc]]
    [tiltontec.cell.poly :refer [c-awaken md-quiesce md-quiesce-self
                                 unchanged-test watch]]))
+
+;;; API Summary
+;;; - `cget`
+;;; - `c-quiesce`
+;;; - `ensure-value-is-current`: check dependencies
+;;; - `c-value-assume`: record cell's new value & propagate to dependents
+
+;;; More details
+
+;;; - `calculate-and-set`
+;;;   - calculate a value using `calculate-and-link`, which records dependencies
+;;;   - record calculated value using `c-value-assume` and propagate to dependent
+
+;;; - `propagate`: notify callers of change & call watchs
+;;;   - the actual propagate and (potential ephemeral-reset) are deferred (check
+;;;     `propagate-to-callers` for explanation)
+;;;   - means propagate operations are actually proceed when current pulse's
+;;;     change all done; and ephemerals are reset after that
 
 #?(:clj (set! *warn-on-reflection* true)
    :cljs (set! *warn-on-infer* true))
@@ -60,6 +78,11 @@
         ;; optimized away cell
         [:optimized-away v]))
     [:non-ref c]))
+
+(defn- c-value-changed? [c new-value old-value]
+  (not ((or (:unchanged-if @c)
+            (unchanged-test (c-model c) (c-prop c)))
+        new-value old-value)))
 
 (defn- ephemeral-reset [rc]
   ;; allow call on any cell, catch here
@@ -157,7 +180,7 @@
        (when *depender*
          (dependency-record c))))))
 
-(defn calculate-and-set
+(defn- calculate-and-set
   "Calculate, link, record, and propagate."
   [c]
   (let [[raw-value propagation-code] (calculate-and-link c)]
@@ -172,8 +195,7 @@
       (c-value-assume c raw-value propagation-code))))
 
 (defn- prop-info-&-callstack
-  "Stringify cell's belonging model & prop-name & the current
-  callstack."
+  "Stringify cell's belonging model & prop-name & the current callstack."
   [c]
   (let [prop (c-prop-name c)
         code (c-code$ c)
@@ -190,14 +212,13 @@
                      (str "....> md-name:" md-name' " prop: " prop'
                           "\n....>    code:" code'))))))
 
-(defn calculate-and-link
+(defn- calculate-and-link
   "The name is accurate: we do no more than invoke the rule of a formula
   and return its value*, but along the way the links between
   dependencies and dependents get determined anew.
 
-  * Well, we also look to see if a synaptic cell has attached a
-  propagaion code to a vector used to wrap the raw value, which we
-  then unpack."
+  * Well, we also look to see if a synaptic cell has attached a propagaion code
+  to a vector used to wrap the raw value, which we then unpack."
   [c]
   (when (some #{c} *call-stack*)
     (c-warn "MXAPI_COMPUTE_CYCLE_DETECTED> cyclic dependency detected while computing " (prop-info-&-callstack c))
@@ -252,12 +273,7 @@
 
 ;; ------------------------------------------------------------
 
-(declare optimize-away?! propagate c-value-changed?)
-
-(defn md-prop-value-store [me prop value]
-  (assert me)
-  (assert (any-ref? me))
-  (rmap-set-prop! me prop value))
+(declare optimize-away?! propagate)
 
 (defn c-value-assume
   "The Cell assumes a new value at awakening, on c-reset!, or after
@@ -324,8 +340,6 @@
 
   new-value)
 
-;; --- unlinking ----------------------------------------------
-
 (defn- md-cell-flush
   "Flushes it from its model if it has one & record the flush."
   [c]
@@ -341,7 +355,7 @@
 ;; optimizing away cells who turn out not to depend on anyone saves a lot of
 ;; work at runtime.
 
-(defn optimize-away?!
+(defn- optimize-away?!
   "Optimizes away cells who turn out not to depend on anyone,
   saving a lot of work at runtime. A caller/user will not bother
   establishing a link, and when we get to models `cget` will find a
@@ -392,41 +406,11 @@
 
       (ref-set! c (c-value c)))))
 
-;; --- c-quiesce -----------
-
-(defn c-quiesce [c]
-  (assert (c-ref? c))
-  (when-let [onq (:on-quiesce @c)] (onq c))
-  (unlink-from-callers c)
-  (unlink-from-used c :quiesce)
-  (ref-set! c :dead-c))
-
-;; --- md-quiesce --
-
-(defmethod md-quiesce-self :default [me]
-  (mxtrc [:quiesce :qself-fallthru] :minfo (minfo me))
-  (when-let [onq (:on-quiesce (meta me))] (onq me))
-  ;; cell's quiesce won't be execued if it's been optimized away
-  (doseq [c (vals (:cz (meta me))) :when c] (c-quiesce c))
-  (ref-set! me nil)
-  (meta-map-set-prop! me ::cty/state :dead))
-
-(defmethod md-quiesce :default [me]
-  (mxtrc [:quiesce :def-fall-thru!] :minfo (minfo me))
-  (md-quiesce-self me))
-
-;----------------- change detection ---------------------------------
-
-(defn c-value-changed? [c new-value old-value]
-  (not ((or (:unchanged-if @c)
-            (unchanged-test (c-model c) (c-prop c)))
-        new-value old-value)))
-
 ;;--------------- change propagation  ----------------------------
 
 (declare propagate-to-callers)
 
-(defn propagate
+(defn- propagate
   "A cell:
   - notifies its callers of its change;
   - calls any watch; and
@@ -451,7 +435,7 @@
         ;; they get watched at the time
         (when (or (c-pulse-unwatched? c)
                   ;; messy: these can get setfed/propagated twice in one pulse+
-                  (some #{(c-lazy c)} [:once-asked :always true]))
+                  (c-lazy-but-not-until-asked? c))
           (c-watch c prior-value :propagate)))
 
       ;;
@@ -467,7 +451,17 @@
       ;;
       (ephemeral-reset c))))
 
-(defn propagate-to-callers [c callers]
+(defn- warn-on-propgate-to-dead-model [c]
+  (c-warn
+   (let [prop (c-prop-name c)
+         code (c-code$ c)
+         md-name (c-md-name c)]
+     (str "propgate-to-callers> dead by time :tell-deps dispatched; bailing"
+          "prop '" prop "' of model '" md-name "'."
+          "\n...> formula for " prop ":\n" code
+          "\n...> full cell:\n" @c))))
+
+(defn- propagate-to-callers [c callers]
   ;;
   ;;  We must defer propagation to callers because of an edge case in which:
   ;;    - X tells A to recalculate
@@ -484,7 +478,7 @@
       (with-integrity [:tell-dependents (cinfo c)]
         (mxtrc [:with-integrity :tell-dependents] :cinfo (cinfo c))
         (if (md-dead? (c-model c))
-          (trx "WHOAA!!!! dead by time :tell-deps dispatched; bailing" c)
+          (warn-on-propgate-to-dead-model c)
           (binding [*causation* causation]
             (doseq [caller (seq callers)
                     :let [skip-propagation?
@@ -492,7 +486,7 @@
                            (= (c-state caller) :quiesced)
                            ;; happens if I changed when caller used me in current pulse+
                            (c-current? caller)
-                           (some #{(c-lazy caller)} [true :always :once-asked]))]
+                           (c-lazy-but-not-until-asked? caller))]
                     :when (not skip-propagation?)
 
                     ;; it is trying to say
@@ -509,3 +503,26 @@
               (mxtrc [:propagate :noti-caller]
                      :caller-cinfo (cinfo caller) :callee-cinfo (cinfo c))
               (calculate-and-set caller))))))))
+
+;; --- c-quiesce -----------
+
+(defn c-quiesce [c]
+  (assert (c-ref? c))
+  (when-let [onq (:on-quiesce @c)] (onq c))
+  (unlink-from-callers c)
+  (unlink-from-used c :quiesce)
+  (ref-set! c :dead-c))
+
+;; --- md-quiesce --
+
+(defmethod md-quiesce-self :default [me]
+  (mxtrc [:quiesce :qself-fallthru] :minfo (minfo me))
+  (when-let [onq (:on-quiesce (meta me))] (onq me))
+  ;; cell's quiesce won't be execued if it's been optimized away
+  (doseq [c (vals (:cz (meta me))) :when c] (c-quiesce c))
+  (ref-set! me nil)
+  (meta-map-set-prop! me ::cty/state :dead))
+
+(defmethod md-quiesce :default [me]
+  (mxtrc [:quiesce :def-fall-thru!] :minfo (minfo me))
+  (md-quiesce-self me))

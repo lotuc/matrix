@@ -24,7 +24,17 @@
   "Optionally populated with the root of a tree of Models."
   tiltontec.model.core/matrix)
 
-(defmacro with-mx [& body]
+(defmacro with-mx
+  "Creates fresh, initial bindings for all the dynamic variables that
+  regulated MX.
+
+  Makes testing more reliable; creates multiple self-contained model
+  group with some orchestration work (using core.async or event
+  queue).
+
+  ref:
+  - https://clojurians.slack.com/archives/CKCBP3QF9/p1677497387342009"
+  [& body]
   `(tiltontec.cell.core/call-with-mx
     (fn [] ~@body)))
 

@@ -1,8 +1,7 @@
 (ns tiltontec.model.accessors
   (:require
-   #?(:clj  [tiltontec.cell.core :refer [c-reset!]]
-      :cljs [tiltontec.cell.core :refer [c-reset!]])
    [tiltontec.cell.base :refer [c-warn md-ref?]]
+   [tiltontec.cell.core :refer [cset!]]
    [tiltontec.cell.evaluate :refer [cget]]
    [tiltontec.util.core :refer [mx-type throw-ex]]))
 
@@ -41,7 +40,7 @@
   (assert (md-ref? me) (str "mset! passed non-model for me setting prop: " prop ": " me))
 
   (if-let [c (md-cell me prop)]
-    (c-reset! c new-value)
+    (cset! c new-value)
     (throw-ex
      (if (contains? @me prop)
        (do (c-warn

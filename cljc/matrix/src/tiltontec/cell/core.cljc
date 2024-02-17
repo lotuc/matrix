@@ -1,18 +1,18 @@
 (ns tiltontec.cell.core
   #?(:cljs (:require-macros
-            [tiltontec.util.ref :refer [rmap-set-prop! dosync! make-ref]]))
+            [tiltontec.util.ref :refer [rmap-set-prop! make-ref]]))
   (:require
    #?(:clj [tiltontec.cell.integrity :refer [ufb-add with-integrity]]
       :cljs [tiltontec.cell.integrity :refer-macros [with-integrity]])
-   #?(:clj [tiltontec.util.ref :refer [dosync! make-ref rmap-set-prop!]])
+   #?(:clj [tiltontec.util.ref :refer [make-ref rmap-set-prop!]])
    [tiltontec.cell.base
     :refer [*c-prop-depth* *call-stack* *causation* *custom-propagator*
             *defer-changes* *depender* *one-pulse?* *pulse*
-            *unfinished-business* *within-integrity* c-async? c-input? c-lazy
-            c-model c-prop c-prop-name c-value c-warn pulse-initial unbound
-            unfin-biz-build without-c-dependency]
+            *unfinished-business* *within-integrity* c-async? c-input?
+            c-lazy-but-not-until-asked? c-model c-prop c-prop-name c-value
+            c-warn pulse-initial unbound unfin-biz-build without-c-dependency]
     :as cty]
-   [tiltontec.cell.evaluate :refer [c-value-assume cget]]
+   [tiltontec.cell.evaluate :refer [c-value-assume] :as evaluate]
    [tiltontec.util.core :refer [mx-type throw-ex]]
    [tiltontec.util.trace :refer [mx-sid-next]]))
 
@@ -230,29 +230,38 @@
       (throw-ex "change to must be deferred by wrapping it in WITH-INTEGRITY"
                 {:cell c :new-value new-value})))
 
-  (if (some #{(c-lazy c)} [:once-asked :always true])
+  (if (c-lazy-but-not-until-asked? c)
     (c-value-assume c new-value nil)
-    (dosync!
-     (with-integrity [:change (c-prop c)]
-       (c-value-assume c new-value nil)))))
+    (with-integrity [:change (c-prop c)]
+      (c-value-assume c new-value nil))))
 
 (defn c-reset! [c new-value]
   (cset! c new-value))
 
 (defn c-swap! [c swap-fn & swap-fn-args]
-  (cset! c (apply swap-fn (cget c) swap-fn-args)))
+  (cset! c (apply swap-fn (evaluate/cget c) swap-fn-args)))
 
-(defmacro c-reset-next! [f-c f-new-value]
-  "watchs should have side-effects only outside the
-cell-mediated model, but it can be useful to have an watch
-kick off further change to the model. To achieve this we
-allow an watch to explicitly queue a c-reset! for
-execution as soon as the current change is manifested."
+(defn cget
+  "Checkout `tiltontec.cell.evaluate/cget`."
+  [c]
+  (evaluate/cget c))
+
+(defn c-quiesece
+  "Checkout `tiltontec.cell.evaluate/c-quiesece`."
+  [c]
+  (evaluate/c-quiesce c))
+
+(defmacro c-reset-next!
+  "watchs should have side-effects only outside the cell-mediated model, but it
+  can be useful to have an watch kick off further change to the model. To
+  achieve this we allow an watch to explicitly queue a c-reset! for execution as
+  soon as the current change is manifested."
+  [f-c f-new-value]
   `(if *within-integrity*
      (ufb-add :change
               [:c-reset-next!
                (fn [~'opcode ~'defer-info]
-                 (call-c-reset-next! ~f-c ~f-new-value))])
+                 (c-value-assume ~f-c ~f-new-value nil))])
      ;; todo new error to test and document
      (throw-ex "c-reset-next! deferred change to %s not under WITH-INTEGRITY supervision."
                {:f-c ~f-c :f-new-value ~f-new-value})))
@@ -261,16 +270,6 @@ execution as soon as the current change is manifested."
   "Completely untested!!!!!!!!!!!!!!!"
   [f-c f-new-value]
   `(c-reset-next! ~f-c ~f-new-value))
-
-(defn call-c-reset-next! [c new-value]
-  (cond
-    ;;-----------------------------------
-    (some #{(c-lazy c)} [:once-asked :always true])
-    (c-value-assume c new-value nil)
-    ;;-------------------------------------------
-    :else
-    (#?(:cljs do :clj dosync)
-     (c-value-assume c new-value nil))))
 
 (defn call-with-mx [fn]
   (binding [*pulse* (pulse-initial)
