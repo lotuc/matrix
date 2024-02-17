@@ -3,12 +3,10 @@
             [tiltontec.matrix.api
              :refer [with-mx without-c-dependency cf-freeze the-kids cFkids with-par
                      fn-watch cF cF+ cFn cF+n cFonce cF1 with-cc mpar fmu mdv!
-                     with-mx-trace with-minfo with-minfo-std
-                     mxtrc with-integrity]]))
+                     with-integrity]]))
   (:require
    [tiltontec.cell.base :as cb]
    [tiltontec.cell.core]
-   [tiltontec.cell.diagnostic :as diag]
    [tiltontec.model.accessors :as ma]
    [tiltontec.model.core :as md]
    [tiltontec.model.family :as mf]
@@ -331,25 +329,3 @@
   [what slot & [_me :as options]]
   `(tiltontec.model.navigate/mdv! ~what ~slot ~@options))
 
-;;; --- debug --------------------------
-
-(defmacro with-mx-trace [target & body]
-  `(binding [diag/*mx-trace* ~target]
-     ~@body))
-
-(defmacro mxtrc [tag & bits]
-  `(diag/mxtrc ~tag ~@bits))
-
-(defmacro with-minfo [minfo-body & body]
-  `(binding [diag/*mx-minfo* (fn [~'me] ~minfo-body)]
-     ~@body))
-
-(defmacro with-minfo-std [& body]
-  `(binding [diag/*mx-minfo* nil]
-     ~@body))
-
-(defn minfo [me]
-  (diag/minfo me))
-
-(defn cinfo [c]
-  (diag/cinfo c))

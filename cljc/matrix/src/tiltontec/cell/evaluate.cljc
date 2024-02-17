@@ -1,10 +1,9 @@
 (ns tiltontec.cell.evaluate
   (:require
-   #?(:cljs [tiltontec.cell.integrity
+   #?(:clj  [tiltontec.cell.integrity :refer [c-current? c-pulse-update with-integrity]]
+      :cljs [tiltontec.cell.integrity
              :refer-macros [with-integrity]
-             :refer [c-current? c-pulse-update]]
-      :clj  [tiltontec.cell.integrity :refer [c-current? c-pulse-update with-integrity]])
-   #?(:cljs :clj)
+             :refer [c-current? c-pulse-update]])
    #?(:clj  [tiltontec.util.ref
              :refer [dosync! meta-map-set-prop! meta-map-swap-prop! ref-set!
                      ref-swap! rmap-set-prop!]]
@@ -13,21 +12,35 @@
                             ref-set! ref-swap! rmap-set-prop!]])
    #?(:clj [tiltontec.util.core :refer [mx-type prog1 throw-ex]]
       :cljs [tiltontec.util.core
-             :refer [mx-type throw-ex]
-             :refer-macros [prog1]])
+             :refer [mx-type]
+             :refer-macros [prog1 throw-ex]])
    [clojure.string :as str]
-   [tiltontec.cell.base
-    :refer [*c-prop-depth* *call-stack* *causation* *custom-propagator*
-            *defer-changes* *depender* *one-pulse?* *pulse* c-callers c-code$
-            c-ephemeral? c-formula? c-input? c-lazy-but-not-until-asked?
-            c-md-name c-me c-model c-optimize c-optimized-away? c-prop
-            c-prop-name c-pulse c-pulse-last-changed c-pulse-unwatched?
-            c-pulse-watched c-ref? c-rule c-state c-synaptic? c-useds c-valid?
-            c-value c-value-state c-warn dependency-drop dependency-record
-            md-dead? unbound unlink-from-callers unlink-from-used
-            without-c-dependency]
-    :as cty]
-   [tiltontec.cell.diagnostic :refer [cinfo minfo mxtrc]]
+   #?(:clj  [tiltontec.cell.base
+             :refer [*c-prop-depth* *call-stack* *causation* *custom-propagator*
+                     *defer-changes* *depender* *one-pulse?* *pulse* c-callers c-code$
+                     c-ephemeral? c-formula? c-input? c-lazy-but-not-until-asked?
+                     c-md-name c-me c-model c-optimize c-optimized-away? c-prop
+                     c-prop-name c-pulse c-pulse-last-changed c-pulse-unwatched?
+                     c-pulse-watched c-ref? c-rule c-state c-synaptic? c-useds c-valid?
+                     c-value c-value-state c-warn dependency-drop dependency-record
+                     md-dead? unbound unlink-from-callers unlink-from-used
+                     without-c-dependency]
+             :as cty]
+      :cljs [tiltontec.cell.base
+             :refer [*c-prop-depth* *call-stack* *causation* *custom-propagator*
+                     *defer-changes* *depender* *one-pulse?* *pulse* c-callers c-code$
+                     c-ephemeral? c-formula? c-input? c-lazy-but-not-until-asked?
+                     c-md-name c-me c-model c-optimize c-optimized-away? c-prop
+                     c-prop-name c-pulse c-pulse-last-changed c-pulse-unwatched?
+                     c-pulse-watched c-ref? c-rule c-state c-synaptic? c-useds c-valid?
+                     c-value c-value-state dependency-drop dependency-record
+                     md-dead? unbound unlink-from-callers unlink-from-used]
+             :refer-macros [without-c-dependency c-warn]
+             :as cty])
+   #?(:clj  [tiltontec.cell.diagnostic :refer [cinfo minfo mxtrc]]
+      :cljs [tiltontec.cell.diagnostic
+             :refer [cinfo minfo]
+             :refer-macros [mxtrc]])
    [tiltontec.cell.poly :refer [c-awaken md-quiesce md-quiesce-self
                                 unchanged-test watch]]))
 
@@ -243,7 +256,7 @@
         (catch #?(:clj Exception :cljs js/Error) e
           (mxtrc [:calculate-and-link :emsg]
                  :cinfo (cinfo c)
-                 :emsg #?(:clj (.getMessage e) :cljs (.message e)))
+                 :emsg #?(:clj (.getMessage e) :cljs (.message ^js/Error e)))
           (throw e))))))
 
 ;;; --- awakening ------------------------------------

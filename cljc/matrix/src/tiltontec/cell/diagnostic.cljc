@@ -1,9 +1,10 @@
 (ns tiltontec.cell.diagnostic
-  #?(:cljs
-     (:require-macros [tiltontec.cell.diagnostic :refer [mxtrc]]
-                      [tiltontec.util.ref :refer [any-ref?]]))
+  #?(:cljs (:require-macros
+            [tiltontec.cell.diagnostic
+             :refer [mxtrc with-mx-trace with-minfo with-minfo-std]]))
   (:require
-   #?(:clj [tiltontec.util.ref :refer [any-ref?]])
+   #?(:clj  [tiltontec.util.ref :refer [any-ref?]]
+      :cljs [tiltontec.util.ref :refer-macros [any-ref?]])
    [clojure.set :as set]
    [clojure.string :as str]
    [tiltontec.cell.base
@@ -73,6 +74,18 @@
           (str "mxtrc> first argument must be keyword or keywords to trace, not |" tag "|"))
   `(when (match-loose ~tag *mx-trace*)
      (print-trace ~tag (build-trace-values ~@bits))))
+
+(defmacro with-mx-trace [target & body]
+  `(binding [*mx-trace* ~target]
+     ~@body))
+
+(defmacro with-minfo [minfo-body & body]
+  `(binding [*mx-minfo* (fn [~'me] ~minfo-body)]
+     ~@body))
+
+(defmacro with-minfo-std [& body]
+  `(binding [*mx-minfo* nil]
+     ~@body))
 
 (comment
   (mxtrc "not ok")
