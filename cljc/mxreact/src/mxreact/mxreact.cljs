@@ -46,7 +46,7 @@
   (js/setTimeout
    (fn []
      ;; cleanup asynchonously
-     (doseq [k (:kids @me) :when (mx/any-ref? k)]
+     (doseq [k (:kids @me) :when (mx/md-ref? k)]
        (md-quiesce k))
      (md-quiesce-self me))
    0))

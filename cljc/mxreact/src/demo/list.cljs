@@ -1,8 +1,10 @@
 (ns demo.list
   (:require
+   [cljs.core.async :refer [go]]
    [mxreact.mxreact :as mxr]
    [react]
-   [tiltontec.matrix.api :as mx]))
+   [tiltontec.matrix.api :as mx]
+   [tiltontec.cell.synapse :refer-macros [with-synapse]]))
 
 (defn- list-prop [me k] (mx/mget (mx/fmu :list me) k))
 (defn- list-prop! [me k v] (mx/mset! (mx/fmu :list me) k v))
@@ -51,15 +53,26 @@
     (mxr/div
       {:style {:display "flex" :flexWrap "wrap"}}
       {:name :container
+
        ;; react to input asynchronously
-       :kid-values-watcher (mx/cF+
-                             [:watch (mx/fn-watch
-                                       (js/setTimeout
-                                        #(mx/with-cc :watch
-                                           (mx/mset! me :kid-values (range new)))
-                                        0))]
-                             (mx/mget (mx/mpar) :count))
-       :kid-values (mx/cI [])
+       ;; :kid-values-watcher (mx/cF+
+       ;;                       [:watch (mx/fn-watch
+       ;;                                 (js/setTimeout
+       ;;                                  #(mx/with-cc :watch
+       ;;                                     (mx/mset! me :kid-values (range new)))
+       ;;                                  0))]
+       ;;                       (mx/mget (mx/mpar) :count))
+       ;; :kid-values (mx/cI [])
+
+       ;; react to input asynchronously using async cell
+       :kid-values* (mx/cF+ [:async? true]
+                      (let [c (mx/mget (mx/mpar) :count)]
+                        (go (range c))))
+       :kid-values (mx/cF (let [p me]
+                            (with-synapse [:kids [prev (atom nil)]]
+                              (or (when-some [v (mx/mget p :kid-values*)]
+                                    (do (reset! prev v) v))
+                                  @prev))))
        :kid-key #(mx/mget % :key)
        :kid-factory (fn [_me kid-val]
                       (mxr/span {:style {:marginLeft "5px"}}

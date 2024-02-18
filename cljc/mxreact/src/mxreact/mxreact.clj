@@ -79,7 +79,7 @@
               (fn [mapkid#]
                 (when mapkid#
                   (cond
-                    (tiltontec.matrix.api/any-ref? mapkid#)
+                    (tiltontec.matrix.api/md-ref? mapkid#)
                     (tiltontec.matrix.api/mget? mapkid# :react-element)
 
                     (or
