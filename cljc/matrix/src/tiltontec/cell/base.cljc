@@ -1,6 +1,6 @@
 (ns tiltontec.cell.base
   #?(:cljs (:require-macros
-            [tiltontec.cell.base :refer [un-stopped without-c-dependency]]
+            [tiltontec.cell.base :refer [un-stopped without-c-dependency wmx-iso]]
             [tiltontec.util.ref :refer [any-ref? def-rmap-props dosync! make-ref
                                         ref-swap!]]))
   (:require
@@ -85,6 +85,12 @@ rule to get once behavior or just when fm-traversing to find someone"
   `(when-not @+stop+
      (pr-warn ~@args)))
 
+(defmacro wmx-iso [& body]
+  `(binding [tiltontec.cell.base/*within-integrity* nil
+             tiltontec.cell.base/*depender* nil
+             tiltontec.cell.base/*defer-changes* false
+             tiltontec.cell.base/*call-stack* nil]
+     ~@body))
 ;; ------------------------------------------------------
 
 (derive ::model ::object)
@@ -101,7 +107,7 @@ rule to get once behavior or just when fm-traversing to find someone"
 (def-rmap-props c-
   me prop state input? rule pulse pulse-last-changed pulse-watched
   useds users callers optimize ephemeral? code
-  lazy synapses synaptic? async?)
+  lazy synapses synaptic? async? then?)
 
 (defn c-model [rc] (c-me rc))
 
@@ -174,7 +180,7 @@ rule to get once behavior or just when fm-traversing to find someone"
 
 ;; --- defmodel rizing ---------------------
 
-(defn md-ref? [x] (some? (mx-type x)))
+(defn md-ref? [x] (and (any-ref? x) (some? (mx-type x))))
 
 (defn md-state [me] (::state (meta me)))
 

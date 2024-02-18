@@ -1,5 +1,7 @@
 (ns tiltontec.cell.evaluate
   (:require
+   #?(:clj  [tiltontec.cell.async :refer [async-run!] :as cell.async]
+      :cljs [tiltontec.cell.async :refer-macros [async-run!] :as cell.async])
    #?(:clj  [tiltontec.cell.integrity :refer [c-current? c-pulse-update with-integrity]]
       :cljs [tiltontec.cell.integrity
              :refer-macros [with-integrity]
@@ -14,33 +16,38 @@
       :cljs [tiltontec.util.core
              :refer [mx-type]
              :refer-macros [prog1 throw-ex]])
-   [clojure.string :as str]
    #?(:clj  [tiltontec.cell.base
-             :refer [*c-prop-depth* *call-stack* *causation* *custom-propagator*
-                     *defer-changes* *depender* *one-pulse?* *pulse* c-callers c-code$
-                     c-ephemeral? c-formula? c-input? c-lazy-but-not-until-asked?
-                     c-md-name c-me c-model c-optimize c-optimized-away? c-prop
-                     c-prop-name c-pulse c-pulse-last-changed c-pulse-unwatched?
-                     c-pulse-watched c-ref? c-rule c-state c-synaptic? c-useds c-valid?
-                     c-value c-value-state c-warn dependency-drop dependency-record
-                     md-dead? unbound unlink-from-callers unlink-from-used
-                     without-c-dependency]
+             :refer [*c-prop-depth* *call-stack* *causation*
+                     *custom-propagator* *defer-changes* *depender*
+                     *one-pulse?* *pulse* c-async? c-callers c-code$
+                     c-ephemeral? c-formula? c-input?
+                     c-lazy-but-not-until-asked? c-md-name c-me c-model
+                     c-optimize c-optimized-away? c-prop c-prop-name c-pulse
+                     c-pulse-last-changed c-pulse-unwatched? c-pulse-watched
+                     c-ref? c-rule c-state c-synaptic? c-then? c-useds
+                     c-valid? c-value c-value-state c-warn dependency-drop
+                     dependency-record md-dead? unbound unlink-from-callers
+                     unlink-from-used without-c-dependency wmx-iso]
              :as cty]
       :cljs [tiltontec.cell.base
-             :refer [*c-prop-depth* *call-stack* *causation* *custom-propagator*
-                     *defer-changes* *depender* *one-pulse?* *pulse* c-callers c-code$
-                     c-ephemeral? c-formula? c-input? c-lazy-but-not-until-asked?
-                     c-md-name c-me c-model c-optimize c-optimized-away? c-prop
-                     c-prop-name c-pulse c-pulse-last-changed c-pulse-unwatched?
-                     c-pulse-watched c-ref? c-rule c-state c-synaptic? c-useds c-valid?
-                     c-value c-value-state dependency-drop dependency-record
-                     md-dead? unbound unlink-from-callers unlink-from-used]
-             :refer-macros [without-c-dependency c-warn]
+             :refer [*c-prop-depth* *call-stack* *causation*
+                     *custom-propagator* *defer-changes* *depender*
+                     *one-pulse?* *pulse* c-async? c-callers c-code$
+                     c-ephemeral? c-formula? c-input?
+                     c-lazy-but-not-until-asked? c-md-name c-me c-model
+                     c-optimize c-optimized-away? c-prop c-prop-name c-pulse
+                     c-pulse-last-changed c-pulse-unwatched? c-pulse-watched
+                     c-ref? c-rule c-state c-synaptic? c-then? c-useds
+                     c-valid? c-value c-value-state dependency-drop
+                     dependency-record md-dead? unbound unlink-from-callers
+                     unlink-from-used]
+             :refer-macros [without-c-dependency c-warn wmx-iso]
              :as cty])
    #?(:clj  [tiltontec.cell.diagnostic :refer [cinfo minfo mxtrc]]
       :cljs [tiltontec.cell.diagnostic
              :refer [cinfo minfo]
              :refer-macros [mxtrc]])
+   [clojure.string :as str]
    [tiltontec.cell.poly :refer [c-awaken md-quiesce md-quiesce-self
                                 unchanged-test watch]]))
 
@@ -197,15 +204,29 @@
   "Calculate, link, record, and propagate."
   [c]
   (let [[raw-value propagation-code] (calculate-and-link c)]
-    ;; TODO: handling (c-async? c).
-    (when-not (c-optimized-away? c)
-      (assert (map? (deref c)) "calc-n-set")
-      ;; this check for optimized-away? arose because a rule using without-c-dependency
-      ;; can be re-entered unnoticed since that "clears" *call-stack*. If re-entered, a subsequent
-      ;; re-exit will be of an optimized away cell, which will have been value-assumed
-      ;; as part of the opti-away processing.
-      (mxtrc [:calculate-and-set :not-optimized] :cinfo (cinfo c))
-      (c-value-assume c raw-value propagation-code))))
+    (if (c-async? c)
+      (do (when-not (nil? raw-value)
+            (let [info (cinfo c)
+                  then (or (:async-then @c) cell.async/then)]
+              (async-run!
+               (then
+                raw-value
+                (fn [v]
+                  (if (c-ref? c)
+                    (wmx-iso
+                     (with-integrity [:change :async-value-then]
+                       (rmap-set-prop! c :then? true)
+                       (c-value-assume c v propagation-code)))
+                    (c-warn "calculate-and-set> async cell not ref anymore" info)))))))
+          (c-value-assume c nil propagation-code))
+      (when-not (c-optimized-away? c)
+        (assert (map? (deref c)) "calc-n-set")
+        ;; this check for optimized-away? arose because a rule using without-c-dependency
+        ;; can be re-entered unnoticed since that "clears" *call-stack*. If re-entered, a subsequent
+        ;; re-exit will be of an optimized away cell, which will have been value-assumed
+        ;; as part of the opti-away processing.
+        (mxtrc [:calculate-and-set :not-optimized] :cinfo (cinfo c))
+        (c-value-assume c raw-value propagation-code)))))
 
 (defn- prop-info-&-callstack
   "Stringify cell's belonging model & prop-name & the current callstack."
@@ -389,6 +410,8 @@
                    (empty? (c-useds c))
                    (and (= :when-value-t optimize)
                         (some? (c-value c))))
+               ;; we will need the cell to handle the response when it comes in
+               (not (and (c-async? c) (not (c-then? c))))
                ;; c-streams (FNYI) may come this way repeatedly even if
                ;; optimized away
                (not (c-optimized-away? c))
