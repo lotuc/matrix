@@ -1,7 +1,7 @@
 (ns tiltontec.cell.evaluate
   (:require
-   #?(:clj  [tiltontec.cell.async :refer [async-run!] :as cell.async]
-      :cljs [tiltontec.cell.async :refer-macros [async-run!] :as cell.async])
+   #?(:clj  [tiltontec.cell.async :as cell.async]
+      :cljs [tiltontec.cell.async :as cell.async])
    #?(:clj  [tiltontec.cell.integrity :refer [c-current? c-pulse-update with-integrity]]
       :cljs [tiltontec.cell.integrity
              :refer-macros [with-integrity]
@@ -204,21 +204,42 @@
   "Calculate, link, record, and propagate."
   [c]
   (let [[raw-value propagation-code] (calculate-and-link c)]
-    (if (c-async? c)
-      (do (when-not (nil? raw-value)
-            (let [info (cinfo c)
-                  then (or (:async-then @c) cell.async/then)]
-              (async-run!
-               (then
-                raw-value
-                (fn [v]
-                  (if (c-ref? c)
-                    (wmx-iso
-                     (with-integrity [:change :async-value-then]
-                       (rmap-set-prop! c :then? true)
-                       (c-value-assume c v propagation-code)))
-                    (c-warn "calculate-and-set> async cell not ref anymore" info)))))))
-          (c-value-assume c nil propagation-code))
+    (if-some [async? (when-some [v (c-async? c)]
+                       (if (map? v) v {}))]
+      (let [v (if (and (some? raw-value) (contains? async? :pending-value))
+                (do (assert (:abort-last? async?) "multiple pending async task with customized :pending-value not supported.")
+                    (:pending-value async?))
+                (when (:keep-last? async?)
+                  (:async-last-value @c)))]
+        (when (:abort-last? async?)
+          (when-some [abort-fn (:async-last-task-cancellation @c)]
+            (abort-fn)))
+        (when-not (nil? raw-value)
+          (rmap-set-prop! c :async-last-raw-value raw-value)
+          (let [info (cinfo c)
+                ;; build value from async task result (success or failure)
+                async-then (or (:then async?) (fn [ok _err] ok))
+                !cancelled (atom false)
+                then-fn
+                (fn [ok err]
+                  (when-not @!cancelled
+                    (cell.async/async-run!
+                     (when err
+                       (c-warn "calculate-and-set> async cell task failure" info ": " err))
+                     (if (c-ref? c)
+                       (let [then-val (async-then ok err)]
+                         (wmx-iso
+                          (with-integrity [:change :async-value-then]
+                            (rmap-set-prop! c :then? true)
+                            (rmap-set-prop! c :async-last-value then-val)
+                            (c-value-assume c then-val propagation-code))))
+                       (c-warn "calculate-and-set> async cell not ref anymore" info)))))
+                cancel-task! ((cell.async/>task raw-value)
+                              (fn [v] (then-fn v nil))
+                              (fn [err] (then-fn nil err)))]
+            (rmap-set-prop! c :async-last-task-cancellation
+                            #(do (reset! !cancelled true) (cancel-task!)))))
+        (c-value-assume c v propagation-code))
       (when-not (c-optimized-away? c)
         (assert (map? (deref c)) "calc-n-set")
         ;; this check for optimized-away? arose because a rule using without-c-dependency

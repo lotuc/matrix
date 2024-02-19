@@ -28,7 +28,7 @@
 (def +valid-formula-options+
   #{:watch :prop :input? :lazy :optimize :ephemeral? :unchanged-if
     :model :synaptic? :synapse-id
-    :code :rule :async? :async-then :debug :on-quiesce})
+    :code :rule :async? :debug :on-quiesce})
 
 (defn- c-options-canonicalize [options allowed]
   (assert (even? (count options)))

@@ -1,40 +1,47 @@
 (ns tiltontec.cell.async
   #?(:cljs (:require-macros [tiltontec.cell.async]))
   (:require
+   #?(:clj  [clojure.core.async :refer [<! go] :as a]
+      :cljs [cljs.core.async :refer [<! go]])
    #?(:clj  [tiltontec.cell.base :refer [c-warn]]
       :cljs [tiltontec.cell.base :refer-macros [c-warn]])
-   #?(:clj  [clojure.core.async :refer [<! go]]
-      :cljs [cljs.core.async :refer [<! go]])
    #?(:cljs [cljs.core.async.impl.channels :refer [ManyToManyChannel]]))
   #?(:clj (:import
            [clojure.core.async.impl.channels ManyToManyChannel])))
 
-(defprotocol AsyncValue
-  "A protocol for async values."
-  (then [this f]))
+(defprotocol Task
+  "A protocol for async values.
+
+  (partial then task-val) is the sense of task described in
+  https://github.com/leonoel/task."
+  (then [this on-success on-failure]))
 
 #?(:cljs
-   (extend-protocol AsyncValue
+   (extend-protocol Task
      js/Promise
-     (then [this f]
-       (.then this f
-              #(c-warn "AsyncValue then caught unhandled exception: " %)))))
+     (then [this on-success on-failure]
+       (.then this on-success on-failure)
+       #(c-warn "js/Promise cancellation not implemented."))))
 
 #?(:clj
-   (extend-protocol AsyncValue
+   (extend-protocol Task
      clojure.lang.IDeref
-     (then [this f]
-       (try (f @this)
-            (catch Throwable t
-              (c-warn "AsyncValue then caught unhandled exception: " t))))))
+     (then [this on-success on-failure]
+       (future (try (on-success @this)
+                    (catch Throwable t
+                      (on-failure t))))
+       #(when (future? this) (future-cancel this)))))
 
-(extend-protocol AsyncValue
+(extend-protocol Task
   ManyToManyChannel
-  (then [ch f]
-    (go (f (<! ch)))))
+  (then [ch on-success _on-failure]
+    (go (on-success (<! ch)))
+    #(c-warn "core.async channel cancellation not implemented.")))
+
+(defn >task [v]
+  (if (fn? v) v (partial then v)))
 
 (defmacro async-run! [& body]
   (if (:ns &env)
-    `(js/Promise. (fn [resolve# _#]
-                    (try ~@body (finally (resolve# nil)))))
+    `(js/Promise. (fn [res#] (try ~@body (finally (res# nil)))))
     `(future ~@body)))
