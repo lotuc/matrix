@@ -206,11 +206,11 @@
   (let [[raw-value propagation-code] (calculate-and-link c)]
     (if-some [async? (when-some [v (c-async? c)]
                        (if (map? v) v {}))]
-      (let [v (if (and (some? raw-value) (contains? async? :pending-value))
-                (do (assert (:abort-last? async?) "multiple pending async task with customized :pending-value not supported.")
-                    (:pending-value async?))
-                (when (:keep-last? async?)
-                  (:async-last-value @c)))]
+      (let [sync-v (if (and (some? raw-value) (contains? async? :pending-value))
+                     (do (assert (:abort-last? async?) "multiple pending async task with customized :pending-value not supported.")
+                         (:pending-value async?))
+                     (when (:keep-last? async?)
+                       (:async-last-value @c)))]
         (when (:abort-last? async?)
           (when-some [abort-fn (:async-last-task-cancellation @c)]
             (abort-fn)))
@@ -232,14 +232,15 @@
                           (with-integrity [:change :async-value-then]
                             (rmap-set-prop! c :then? true)
                             (rmap-set-prop! c :async-last-value then-val)
-                            (c-value-assume c then-val propagation-code))))
+                            (when (c-value-changed? c sync-v then-val)
+                              (c-value-assume c then-val propagation-code)))))
                        (c-warn "calculate-and-set> async cell not ref anymore" info)))))
                 cancel-task! ((cell.async/>task raw-value)
                               (fn [v] (then-fn v nil))
                               (fn [err] (then-fn nil err)))]
             (rmap-set-prop! c :async-last-task-cancellation
                             #(do (reset! !cancelled true) (cancel-task!)))))
-        (c-value-assume c v propagation-code))
+        (c-value-assume c sync-v propagation-code))
       (when-not (c-optimized-away? c)
         (assert (map? (deref c)) "calc-n-set")
         ;; this check for optimized-away? arose because a rule using without-c-dependency
