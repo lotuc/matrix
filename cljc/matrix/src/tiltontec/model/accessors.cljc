@@ -55,7 +55,7 @@
        (do (c-warn "MXAPI_ILLEGAL_MUTATE_NO_SUCH_prop> mswap!/mset!/mset! was attempted to non-existent prop \"" prop "\".\n"
                    "...> FYI: known props are: " (keys @me))
            "MXAPI_ILLEGAL_MUTATE_NO_SUCH_prop> mswap!/mset!/mset! was attempted to non-existent prop"))
-     {:model me :prop :prop :new-value new-value})))
+     {:model me :prop prop :new-value new-value})))
 
 (defn mreset!
   "alternate syntax conforming with clojure terminology"
