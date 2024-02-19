@@ -65,14 +65,9 @@
        ;; :kid-values (mx/cI [])
 
        ;; react to input asynchronously using async cell
-       :kid-values* (mx/cF+ [:async? true]
-                      (let [c (mx/mget (mx/mpar) :count)]
-                        (go (range c))))
-       :kid-values (mx/cF (let [p me]
-                            (with-synapse [:kids [prev (atom nil)]]
-                              (or (when-some [v (mx/mget p :kid-values*)]
-                                    (do (reset! prev v) v))
-                                  @prev))))
+       :kid-values (mx/cF+ [:async? {:keep-last? true}]
+                     (let [c (mx/mget (mx/mpar) :count)]
+                       (go (range c))))
        :kid-key #(mx/mget % :key)
        :kid-factory (fn [_me kid-val]
                       (mxr/span {:style {:marginLeft "5px"}}
