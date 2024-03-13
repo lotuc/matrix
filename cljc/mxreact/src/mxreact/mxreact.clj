@@ -18,17 +18,19 @@
                        [pkey# (tiltontec.matrix.api/mget ~'me pget#)])))
      ~static-props))
 
-(defmacro component-with-hooks [& body]
+(defmacro component-with-hooks
+  "Last form of `body` returns a react element."
+  [& body]
   `(fn []
-     (let [[state# set-state#] (.useState (mxreact.mxreact/get-react) 0)]
+     (let [[state# set-state#] (.useState (mxreact.mxreact/get-react) 0)
+           ref# (when (tiltontec.matrix.api/mget? ~'me :use-ref?)
+                  (.useRef (mxreact.mxreact/get-react) :ref-undefined))]
        (.useEffect (mxreact.mxreact/get-react)
          (fn []
            (if (tiltontec.matrix.api/md-dead? ~'me)
              (js/console.warn "component mounting while model is dead" ~'me)
              (do (tiltontec.matrix.api/mset! ~'me :set-state-fn set-state#)
-                 (when-some [ref# (when (tiltontec.matrix.api/mget? ~'me :use-ref?)
-                                    (.useRef (mxreact.mxreact/get-react) :ref-undefined))]
-                   (tiltontec.matrix.api/mset! ~'me :ref ref#))))
+                 (tiltontec.matrix.api/mset! ~'me :ref ref#)))
            (fn []))
          (cljs.core/clj->js [~'me]))
        ~@body)))
@@ -64,7 +66,7 @@
   `(tiltontec.matrix.api/cF
      (.createElement (mxreact.mxreact/get-react)
        (mxreact.mxreact/component-with-hooks
-         (apply react/createElement ~react-component
+         (apply (.-createElement (mxreact.mxreact/get-react)) #_react/createElement ~react-component
            (let [jsx-props# ~jsx-props
                  ref# (tiltontec.matrix.api/mget? ~'me :ref)]
              (when (and jsx-props# (not (map? jsx-props#)))
