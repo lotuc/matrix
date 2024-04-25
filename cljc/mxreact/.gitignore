@@ -6,3 +6,4 @@ public/css
 .shadow-cljs/
 /.cpcache
 !.lsp/config.edn
+pom.xml
