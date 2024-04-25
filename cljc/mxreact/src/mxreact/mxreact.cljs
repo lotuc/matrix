@@ -39,8 +39,6 @@
      (md-quiesce-self me))
    0))
 
-(derive :mxreact.mxreact/mxreact.elt :tiltontec.model/family)
-
 (defmethod md-quiesce :mxreact.mxreact/mxreact.elt [me]
   ;; normally called by kids observer, but we shadow that
   (js/setTimeout

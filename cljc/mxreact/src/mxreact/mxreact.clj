@@ -31,11 +31,12 @@
              (js/console.warn "component mounting while model is dead" ~'me)
              (do (tiltontec.matrix.api/mset! ~'me :set-state-fn set-state#)
                  (tiltontec.matrix.api/mset! ~'me :ref ref#)))
-           (fn []))
+           (fn []
+             (tiltontec.cell.poly/md-quiesce ~'me)))
          (cljs.core/clj->js [~'me]))
        ~@body)))
 
-(defmacro mx$
+(defmacro mx$ {:style/indent 0}
   ([type jsx-props mx-props react-element-formula-body]
    (let [k (str (gensym "content"))
          type (if (keyword? type) (name type) type)]

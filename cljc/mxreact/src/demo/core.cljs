@@ -5,6 +5,7 @@
    [demo.reagent-interop :as reagent-interop]
    [demo.todomvc :as todomvc]
    [demo.x100-hello-world :as x100-hello-world]
+   [demo.x002-child :as x002-child]
    [mxreact.mxreact :refer-macros [fm*] :as mxr]
    [react]
    [tiltontec.matrix.api :as mx]))
@@ -51,4 +52,4 @@
     (render-root-element (reagent-interop/reagent-app))
     (render-matrix-app reagent-interop/MatrixApp))
 
-  (render-matrix-app x100-hello-world/app))
+  (render-matrix-app x002-child/app))
