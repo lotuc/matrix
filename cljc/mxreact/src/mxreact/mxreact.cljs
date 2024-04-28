@@ -19,6 +19,9 @@
   (mx/make :mxreact.mxreact/mxreact.app
     :rx-dom (mx/cFonce (mx/with-par me (app)))))
 
+(defn react-element [m]
+  (mx/mget? m :react-element))
+
 (defn mxreact-app-root-element [app]
   (when-some [rx-dom (mx/mget app :rx-dom)]
     (mx/mget? rx-dom :react-element)))
@@ -67,7 +70,7 @@
           (not= old-val unbound)
           ;; ^^^ observe forced anyway on new cells, when (= oldv unbound), so
           ;; do not bother
-          (not (#{:set-state-fn :ref} prop-name))
+          (not (#{:set-state-fn} prop-name))
           ;; ^^^ these fields are initialized by the react component which
           ;; should not cause rerendering
           )

@@ -67,7 +67,7 @@
   `(tiltontec.matrix.api/cF
      (.createElement (mxreact.mxreact/get-react)
        (mxreact.mxreact/component-with-hooks
-         (apply (.-createElement (mxreact.mxreact/get-react)) #_react/createElement ~react-component
+         (apply (.-createElement (mxreact.mxreact/get-react)) ~react-component
            (let [jsx-props# ~jsx-props
                  ref# (tiltontec.matrix.api/mget? ~'me :ref)]
              (when (and jsx-props# (not (map? jsx-props#)))
@@ -153,6 +153,9 @@
          (gen-tag tag))))
 
 (gen-tags)
+
+(defmacro fragment [& args#]
+  `(mkc (.-Fragment (mxreact.mxreact/get-react)) ~@args#))
 
 (defmacro fmu
   "Search the model tree from `me` with condition `what`, excluding
