@@ -1,4 +1,4 @@
-(ns demo.reagent-interop
+(ns demo.x004-reagent-interop
   (:require
    [mxreact.mxreact :as mxr]
    [react]

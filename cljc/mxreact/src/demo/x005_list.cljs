@@ -1,10 +1,9 @@
-(ns demo.list
+(ns demo.x005-list
   (:require
    [cljs.core.async :refer [go]]
    [mxreact.mxreact :as mxr]
    [react]
-   [tiltontec.matrix.api :as mx]
-   [tiltontec.cell.synapse :refer-macros [with-synapse]]))
+   [tiltontec.matrix.api :as mx]))
 
 (defn- list-prop [me k] (mx/mget (mx/fmu :list me) k))
 (defn- list-prop! [me k v] (mx/mset! (mx/fmu :list me) k v))
@@ -53,16 +52,6 @@
     (mxr/div
       {:style {:display "flex" :flexWrap "wrap"}}
       {:name :container
-
-       ;; react to input asynchronously
-       ;; :kid-values-watcher (mx/cF+
-       ;;                       [:watch (mx/fn-watch
-       ;;                                 (js/setTimeout
-       ;;                                  #(mx/with-cc :watch
-       ;;                                     (mx/mset! me :kid-values (range new)))
-       ;;                                  0))]
-       ;;                       (mx/mget (mx/mpar) :count))
-       ;; :kid-values (mx/cI [])
 
        ;; react to input asynchronously using async cell
        :kid-values (mx/cF+ [:async? {:keep-last? true}]

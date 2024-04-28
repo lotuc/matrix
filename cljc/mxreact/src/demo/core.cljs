@@ -1,11 +1,12 @@
 (ns demo.core
   (:require
    ["react-dom/client" :refer [createRoot]]
-   [demo.list]
-   [demo.reagent-interop :as reagent-interop]
-   [demo.todomvc :as todomvc]
-   [demo.x100-hello-world :as x100-hello-world]
-   [demo.x002-child :as x002-child]
+   [demo.x001-hello-world]
+   [demo.x002-child]
+   [demo.x003-todomvc]
+   [demo.x004-reagent-interop]
+   [demo.x005-list]
+   [demo.x006-use-ref]
    [mxreact.mxreact :refer-macros [fm*] :as mxr]
    [react]
    [tiltontec.matrix.api :as mx]))
@@ -41,15 +42,4 @@
 
 #_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defn ^:dev/after-load start []
-  (comment
-    (render-matrix-app x100-hello-world/app)
-
-    (render-matrix-app todomvc/TodoMVC)
-
-    (render-matrix-app demo.list/MatrixApp)
-    (render-root-element (mxr/$ demo.list/ReactApp))
-
-    (render-root-element (reagent-interop/reagent-app))
-    (render-matrix-app reagent-interop/MatrixApp))
-
-  (render-matrix-app x002-child/app))
+  (render-matrix-app demo.x005-list/MatrixApp))
