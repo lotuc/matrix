@@ -7,6 +7,7 @@
    [demo.x004-reagent-interop]
    [demo.x005-list]
    [demo.x006-use-ref]
+   [demo.x007-async]
    [mxreact.mxreact :refer-macros [fm*] :as mxr]
    [react]
    [tiltontec.matrix.api :as mx]))
@@ -42,4 +43,4 @@
 
 #_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defn ^:dev/after-load start []
-  (render-matrix-app demo.x005-list/MatrixApp))
+  (render-matrix-app demo.x007-async/app))
