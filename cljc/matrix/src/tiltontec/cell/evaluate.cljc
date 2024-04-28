@@ -207,8 +207,7 @@
     (if-some [async? (when-some [v (c-async? c)]
                        (if (map? v) v {}))]
       (let [sync-v (if (and (some? raw-value) (contains? async? :pending-value))
-                     (do (assert (:abort-last? async?) "multiple pending async task with customized :pending-value not supported.")
-                         (:pending-value async?))
+                     (:pending-value async?)
                      (when (:keep-last? async?)
                        (:async-last-value @c)))]
         (when (:abort-last? async?)
